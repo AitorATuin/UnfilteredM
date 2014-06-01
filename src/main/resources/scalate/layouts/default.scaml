@@ -1,0 +1,19 @@
+-@ val body: String = ""
+!!! 5
+%html
+  %head
+    %title Aitor Iturri - Personal Site
+    %meta{:name=>"viewport",
+      :content=>"width=device-width, initial-scale=1, maximum-scale=1"}
+    %link{:rel => "stylesheet",
+      :type => "text/css",
+      :href=> "/assets/css/styles.css"}
+    %link{:rel => "stylesheet",
+      :type => "text/css",
+      :href=> "/assets/css/progress.css"}
+    %link(href='http://fonts.googleapis.com/css?family=Ubuntu:300,400' rel='stylesheet' type='text/css')
+    %script{:type => "text/javascript",
+        :src  => "/assets/js/logikujo.js"}
+    %meta(name="viewport" content="width=device-width, initial-scale=1.0")
+  %body
+    #{unescape(body)}

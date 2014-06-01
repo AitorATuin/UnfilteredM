@@ -1,0 +1,41 @@
+.gray(@percent) {
+  color: lighten(@black, percentage(@percent / 100));
+}
+
+.fontFace (@family, @file-base, @weight: normal, @style: normal) {
+  @font-face {
+    font-family: @family;
+    src: url("@{file-base}.eot");
+    src: url("@{file-base}.eot?#iefix") format("embedded-opentype"),
+         url("@{file-base}.woff") format("woff"),
+         url("@{file-base}.ttf") format("truetype");
+    font-weight: @weight;
+    font-style: @style;
+  }
+}
+
+.bottom {
+    z-index: -9999;
+}
+
+.box (@size:100px, @border:2px solid @splitSectionsColor, @background: @headerColor) {
+  border: @border;
+  //background: @background;
+  height: @size;
+  width: @size;
+}
+
+.debugDiv() {
+  border: 2px solid;
+  background: red;
+}
+
+.centerImg() {
+  //margin-top: (@circleHem - @imageHem) / 2;
+  margin-top: -@imageHem;
+  margin-left: (@circleWem - @imageWem) / 2;
+}
+
+.headerSectionShadow(@color) {
+  .box-shadow(0px 10px 15px -3px @color)
+}

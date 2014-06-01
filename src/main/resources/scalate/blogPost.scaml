@@ -1,0 +1,26 @@
+-@ val post: String = ""
+- attributes("layout") = "src/main/resources/scalate/layouts/defaultBlog.scaml"
+%section#splash.blog(tabindex=1)
+  %aside#left-splash.blog
+  %section#right-splash.blog
+    %header
+      %div#name.blog
+        %h1#name1 Aitor Iturri
+    %article.post-entry.blog
+      %section.content#post-entry
+        #{unescape(post)}
+%footer
+  %h3
+    Powered by
+    %a{:href => "http://scala-lang.org"} scala
+    |
+    %a{:href=>"http://unfiltered.databinder.net/"} unfiltered
+    |
+    %a{:href=>"http://nginx.org"} nginx
+    |
+    %a{:href=>"https://github.com/scalaz/scalaz"} scalaz
+    |
+    %a{:href=>"http://www.scala-sbt.org/"} sbt
+    and
+    %a{:href=>"http://www.linux.org/"} linux
+    ;)

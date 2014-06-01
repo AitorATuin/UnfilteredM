@@ -1,0 +1,255 @@
+- import scala.collection.immutable.Map
+//- import com.logikujo.www.captcha.AsciiCaptcha
+-@ val name: String = ""
+-@ val skillsPerRow:Int = 4
+-@ val skills: Map[String, Int] = Map("scala" -> 85, "lua" -> 90, "java" -> 60, "c" -> 85, "php" -> 60, "less" -> 70, "html" -> 85, "css" -> 60, "javascript" -> 80, "Unix/Linux" -> 96, "Windows" -> 70, "Android" -> 70, "IOS" -> 80 )
+-@ val abilities: Map[String, Int] = Map("Communication" -> 80, "Reasoning" -> 20)
+//-@ val captcha:AsciiCaptcha = AsciiCaptcha(10)
+//-@ val captcha = Captcha.new[AsciiCaptcha]
+%section#splash(tabindex=1)
+  %aside#left-splash
+    %div#circle-logo
+      %div.circle
+  %article#right-splash
+    %div#name
+      %h1#name1 Aitor Iturri
+      %h1#name2 Aitor Iturri
+    %section.content.centered#titles
+      %div.title#title1
+        %h2.flaticon-graduation14
+          Computer Engineer
+      %div.title#title2
+        %h2.flaticon-graduation14
+          System Administrator
+      %div.title#title3
+        %h2.flaticon-stack9
+          Full Stack Developer
+      %div.title#title4
+        %div.slide
+          %h3
+            %span.disabled
+              to code
+            %span.disabled
+              scala
+            %span.disabled
+              coffee
+            %span
+              functional programming
+%nav#menu
+  %div.menu-item.about.selected
+    %h1
+      %a.flaticon-businessman65{:href=>"#about"}
+        About Me
+  %div.menu-item.projects
+    %h1
+      %a.flaticon-technical{:href=>"#projects"}
+        Projects
+  %div.menu-item.contact
+    %h1
+      %a.flaticon-email6{:href=>"#contact"}
+        Contact
+%section.menu-content.info.about.selected.noJs#about(tabindex=2)
+  %header
+  %article.content
+    %section#brief
+      %header.underlined
+        %h2
+          Brief About Me
+      %article
+        %p
+          Hej, my name is Aitor Iturri, I'm a spanish guy living now in Sweden.
+        %p
+          I'm a tech geek who loves computers and the language they speak,
+          always ready to try new valuable languages which can offer something interesting.
+          I love Functional Programming and all the concepts and abstractions behind it.
+        %p
+          I'm also a supporter of OSS (Open-Source Software) with almost 10 years of experience administering linux systems,
+          i love to feel the power of the black console through your fingers :)
+        %p
+          One of my favourites time killer activities is to take Coursera courses, the best way to have a nice time learning new things.
+        %p
+          I can say that programming and experimenting are my avocation and my vocation.
+    %section#education
+      %header.underlined
+        %h2
+          Education
+      %article
+        %ul
+          %li
+            %p
+              Higher National Diploma as System Administrator.
+          %li
+            %p
+              Bachelor Degree as Computer Engineer.
+          %li
+            %p
+              Several courses, here are some of them
+              %ul
+                %li
+                  %p Cryptography.
+                %li
+                  %p Malicious Software.
+                %li
+                  %p Combinational Game Theory.
+                %li
+                  %p Machine Learning.
+                %li
+                  %p Startup Engineering.
+          %li
+            %p
+              I also own the following certificates (yes, i know they are not related, but i got them ;)
+            %ul
+              %li
+                %p OHSAS 18001 certification.
+              %li
+                %p Spanish Gunner's certification.
+    %section#skills
+      %header.underlined
+        %h2
+          Skills
+      %article
+        %p
+          After several years working as developer and system administrator
+          i have acquired several skills related to the involved technology and to the required abilities for a well done work.
+        %div.content
+          = skills.grouped(skillsPerRow).foreach
+            - l =>
+              %div.items
+                - l.foreach
+                  - v =>
+                    %div.item
+                      %h3
+                        #{v._1}
+                      %div.horizontal.radial-progress(data-progress="#{v._2}")
+                        %div.circle
+                          %div.mask.left
+                            %div.fill
+                          %div.mask.right
+                            %div.fill
+                        %div.inset
+                          %div.label.percent
+                            #{v._2}
+%section.menu-content.info.projects.noJs#projects
+  %header
+  %article.content
+    %section
+      %header.underlined
+        %h2
+          Personal Projects
+      %article
+        %p
+          Here you can find some of the projects i have create or i am working on.
+          Most of them are hosted on github and are licensed on an open source licence (unless otherwise specified in the projects)
+          so feel free to fork, modify and use them if you want.
+        %p
+          If you make any improve or decided to use them i would be glad to know it. Thanks ;)
+        %section.project
+          %h2
+            %a{:href=>"https://github.com/AitorATuin/sbt-livescript"}
+            sbt-livescript
+          %p.content
+            sbt plugin that allows to use livescript scripts when developing webapps.
+        %section.project
+          %h2
+            %a{:href=>"https://github.com/AitorATuin/logisimple.g8"}
+            logisimple.g8
+          %p.content
+            giter8 template to starting a new scala project.
+            It comes with scalaz7, scalatest and scalacheck and some plugins for sbt.
+        %section.project
+          %h2
+            %a{:href=>"https://github.com/AitorATuin/sCryptoDSL"}
+            sCryptoDSL
+          %p.content
+            Small scala library to play with cryptographic functions. It's was created while coursing the Cryptography I course in coursera.
+        %section.project
+          %h2
+            %a{:href=>"https://github.com/AitorATuin/spores"}
+            spores
+          %p.content
+            scala client library which implements the spore framework (used to specify rest services).
+        %section.project
+          %h2
+            %a{:href=>"https://github.com/AitorATuin/lCurses"}
+            lCurses
+          %p.content
+            sbt nCurses binding for lua.
+        %section.project
+          %h2
+            %a{:href=>"https://github.com/AitorATuin/lNotify"}
+            lNotify
+          %p.content
+            Lua binding (using alien) to the inotify linux kernel subsystem.
+        %section.project
+          %h2
+            %a{:href=>"https://github.com/AitorATuin/gDrill"}
+            gDrill
+          %p.content
+            curses interfaced program to control (and program) an industrial drill.
+        %p
+          I am keeping uploading more projects to the github account so this section will grow with the time.
+%section.menu-content.info.contact.noJs#contact(tabindex=3)
+  %header
+  %article.content
+    %section#why-to-contact
+      %header.underlined
+        %h2
+          Why to contact me?!
+      %article
+        %p
+          Do you have any project and need professional help?
+        %p  Do you need to develop some code?
+        %p  Do you have any system to administering?
+        %p  Do you need mobile integration in your bussines?
+        %p
+          Do not hesitate and contact me! You will get satisfied!
+    %section#get-in-touch
+      %header.underlined
+        %h2
+          Get in touch!
+      %article
+        %p
+          I'd love to hear from you! If you want more information about working with me, please fill
+          in the form below with a detailed description of your project.
+        %p
+          I'll get back to you within 24 hours.
+        %section.form
+          %form(action="contact" method="POST")
+            %div.form
+              %label
+                %span Name/Company
+                %input(type="text" placeholder="Your [Company] Name" name="name" tabindex="4" required)
+            %div.form
+              %label
+                %span Contact email
+                %input(type="email" placeholder="Your contact email" name="email" tabindex="5" required)
+            %div.form
+              %label
+                %span Contact Phone
+                %input(type="tel" placeHolder="Your contact phone" name="phone" tabindex="6")
+            %div.form
+              %label
+                %span Website
+                %input(type="url" placeHolder="Your website url" name="website" tabindex="7")
+            %div.form.textarea
+              %label
+                %span Message
+                %textarea(placeholder="Let me know what do you want" name="message" tabindex="8" required)
+            %div.form.button
+              %button(name="submit" type="submit" id="contact-submit")
+                Send!
+%footer
+  %h3
+    Powered by
+    %a{:href => "http://scala-lang.org"} scala
+    |
+    %a{:href=>"http://unfiltered.databinder.net/"} unfiltered
+    |
+    %a{:href=>"http://nginx.org"} nginx
+    |
+    %a{:href=>"https://github.com/scalaz/scalaz"} scalaz
+    |
+    %a{:href=>"http://www.scala-sbt.org/"} sbt
+    and
+    %a{:href=>"http://www.linux.org/"} linux
+    ;)
