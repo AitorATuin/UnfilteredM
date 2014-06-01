@@ -59,3 +59,4 @@ node_modules
 src/main/javascript/ls/
 
 src/main/resources/www/js/logikujo.js
+src/main/resources/application.conf
