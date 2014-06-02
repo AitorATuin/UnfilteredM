@@ -44,11 +44,14 @@ package object www {
   def unfilteredPlanM = liftM[UnfilteredPlan]_
   def unfilteredIntentM = liftM[Plan.Intent]_
   def unfilteredConfigM = Kleisli.ask[ErrorM, Config]
+
+  // ReaderT overResultM, ResponseFunction[Any]
   type ResultM[+A] = Result[ResponseFunction[Any],A]
   def directiveM[A](directive: Directive[Any, ResponseFunction[Any], A]) =
     Kleisli[ResultM, HttpRequest[Any], A](r => directive(r))
-  def directive[A](directiveM: Kleisli[ResultM, HttpRequest[Any],A]) =
-    Directive[Any, Any, A](directiveM.run(_))
+  //def directive[A](directiveM: Kleisli[ResultM, HttpRequest[Any],A]) =
+  //  Directive[Any, Any, A](directiveM.run(_))
+
 
   trait UnfilteredPlan extends Plan
 
