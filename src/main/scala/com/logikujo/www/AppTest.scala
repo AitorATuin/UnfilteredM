@@ -6,17 +6,26 @@ import plans._
 import plans.blog.BlogPlan._
 import model.blog.PostEntry
 import model.blog.PostEntry.Implicits._
-import data.blog._
+//import data.blog._
+import AsyncDirective._
+
 import com.github.kxbmap.configs._
 import com.typesafe.config._
 import unfiltered.directives.{data => udata}
 import unfiltered.directives._
 import Directives._
+import Result.{Success => RSuccess, Failure => RFailure}
 import unfiltered.response._
 import unfiltered.request._
 import unfiltered.filter.request._
+import argonaut._
+import Argonaut._
 import scalaz._
 import Scalaz._
+
+import dispatch._
+import org.slf4j.LoggerFactory
+
 
 /**
  *
@@ -25,9 +34,53 @@ import Scalaz._
  * com.logikujo.www 10/05/14 :: 17:58 :: eof
  *
  */
+ // Http.configure(_ setFollowRedirects true)(url(s) OK as.String)}
+trait GitHook {
 
+  val logger = LoggerFactory.getLogger(classOf[GitHook])
+  private val githubUrl = "https://github.com/login/oauth/access_token"
 
-object AppTest {
+  def contentType(tpe: String) =
+    when { case RequestContentType(`tpe`) =>} orElse UnsupportedMediaType
+
+  // Parse a json
+  def asJson(str: String) = {
+    val json = Parse.parse(str)
+    when { case _ if json.isRight => json.toOption.get} orElse BadRequest
+  }
+
+  def parseJson[A](v:Option[A]) =
+    when { case _ if v.isDefined => v } orElse BadRequest
+
+  def addedPostsFromJson(json: Json) = parseJson {
+    for {
+      commits         <- json -| "commits"
+      commitsArray    <- commits.array
+      addedItems      <- commitsArray.map(_.fieldOrEmptyArray("added")).some
+      addedItemsArray <- addedItems.map(_.arrayOrEmpty).some
+    } yield addedItemsArray.flatten.map(_.toString)
+  }
+
+  def gitHookIntent = Directive.Intent[Any, Any] {
+    case ContextPath(ctx, Seg("githook" :: Nil)) => for {
+      _ <- POST
+      r <- request[Any]
+      _ <- contentType("application/json")
+      json <- asJson(Body string r)
+      addedPosts <- addedPostsFromJson(json)
+    } yield Ok ~> ResponseString((~ addedPosts).mkString("|"))
+  }
+  import com.logikujo.www._
+  import com.logikujo.www.model.Mongo._
+  def gitHookPlan[A](): UnfilteredPlanM = for {
+    config <- unfilteredConfigM
+    mongo <- unfilteredMongoM
+    gitHook <- gitHookIntent
+  } yield gitHook
+}
+
+object AppTest extends GitHook {
   def main(args: Array[String]) {
+    unfiltered.jetty.Http.local(8080).filter(unfiltered.filter.Planify(gitHookPlan)).run()
   }
 }
