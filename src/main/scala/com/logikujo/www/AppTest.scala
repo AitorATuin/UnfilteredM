@@ -11,13 +11,13 @@ import AsyncDirective._
 
 import com.github.kxbmap.configs._
 import com.typesafe.config._
+import unfiltered.response._
+import unfiltered.request._
+import unfiltered.filter.request._
 import unfiltered.directives.{data => udata}
 import unfiltered.directives._
 import Directives._
 import Result.{Success => RSuccess, Failure => RFailure}
-import unfiltered.response._
-import unfiltered.request._
-import unfiltered.filter.request._
 import argonaut._
 import Argonaut._
 import scalaz._
@@ -36,6 +36,9 @@ import org.slf4j.LoggerFactory
  */
  // Http.configure(_ setFollowRedirects true)(url(s) OK as.String)}
 trait GitHook {
+  trait Users {
+    def auth(u: String, p: String): Boolean
+  }
 
   val logger = LoggerFactory.getLogger(classOf[GitHook])
   private val githubUrl = "https://github.com/login/oauth/access_token"
@@ -64,23 +67,37 @@ trait GitHook {
   def gitHookIntent = Directive.Intent[Any, Any] {
     case ContextPath(ctx, Seg("githook" :: Nil)) => for {
       _ <- POST
-      r <- request[Any]
+      r <- unfiltered.directives.Directives.request[Any]
       _ <- contentType("application/json")
       json <- asJson(Body string r)
       addedPosts <- addedPostsFromJson(json)
     } yield Ok ~> ResponseString((~ addedPosts).mkString("|"))
   }
+  val validateUser = (user:String, pass:String) => true
+
   import com.logikujo.www._
   import com.logikujo.www.model.Mongo._
-  def gitHookPlan[A](): UnfilteredPlanM = for {
+  import unfiltered.kit._
+  def gitHookPlan(): UnfilteredPlanM = for {
     config <- unfilteredConfigM
-    mongo <- unfilteredMongoM
-    gitHook <- gitHookIntent
-  } yield gitHook
+    //mongo <- unfilteredMongoM
+    //gitHook <- kit.Auth.basic(validateUser)(gitHookIntent)
+  } yield Auth.basic(validateUser)(gitHookIntent)
+}
+
+trait AppTest
+
+object InProduction {
+  implicit val config = Configuration[AppTest]("com.logikujo.apptest")
+}
+
+object InTest {
+  implicit val config = Configuration[AppTest]("com.logikujo.apptest.test")
 }
 
 object AppTest extends GitHook {
+  import InProduction._
   def main(args: Array[String]) {
-    unfiltered.jetty.Http.local(8080).filter(unfiltered.filter.Planify(gitHookPlan)).run()
+    UnfilteredApp[AppTest]() ~> ("/" -> (gitHookPlan() :: Nil)) run()
   }
 }

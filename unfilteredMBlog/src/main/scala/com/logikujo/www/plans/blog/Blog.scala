@@ -70,7 +70,7 @@ protected trait BlogIntents {
     }
 
     def apply(cfgPath: String, defaultPath: List[String]): UnfilteredM[ConfiguredSeg.ConfiguredSegImpl] =
-      liftM((c: Config) =>
+      liftM((c: Configuration) =>
         apply(c.opt[List[String]](cfgPath).getOrElse(defaultPath)).right[String])
   }
 
@@ -112,14 +112,7 @@ protected trait BlogIntents {
     }
   }
 
-  def insertPost3[A](p: A)(implicit mongoRecord: MongoRecord[A], ev: BSONDocumentWriter[A]) = {
-    for {
-      f <- mongoRecord.insert3(p)
-    } yield f
-  }
-
-
-  def restIntent[A](config: Config, mongo: Mongo, PostSeg: ConfiguredSegImpl)(implicit
+  def restIntent[A](config: Configuration, mongo: Mongo, PostSeg: ConfiguredSegImpl)(implicit
                                                                               mongoRecord: MongoRecord[A],
                                                                               r: BSONDocumentReader[A],
                                                                               w: BSONDocumentWriter[A],
@@ -151,7 +144,7 @@ protected trait BlogIntents {
     }
   }
 
-  def blogIntent[A](scalate: Scalate, config: Config, mongo: Mongo, PostSeg: ConfiguredSegImpl)
+  def blogIntent[A](scalate: Scalate, config: Configuration, mongo: Mongo, PostSeg: ConfiguredSegImpl)
                    (implicit
                     mongoRecord: MongoRecord[A],
                     r: BSONDocumentReader[A],
@@ -172,36 +165,7 @@ protected trait BlogIntents {
         orElse(failure(NotFound ~> Redirect("/blog/404")))
       //case ContextPath(ctx, PostSeg(xs)) => failure(NotFound ~> Redirect("404"))
     }
-
-  def blogIntent2[A](scalate: Scalate, config: Config, mongo: Mongo, PostSeg: ConfiguredSegImpl) = {
-    Directive.Intent[Any, Any] {
-      //case ContextPath(ctx, PostSeg(Nil)) => scalate("blogPost.scaml")
-      case ContextPath(ctx, PostSeg(title :: Nil)) => (for {
-        _ <- GET
-        request <- Directives.request[Any]
-        postEntry <- Directive((_: HttpRequest[Any]) => postEntry[A](mongo)(title).run(config))
-      } yield postEntry).
-        flatMap(post => scalate("blogPost.scaml", "post" -> post.contents)).
-        orElse(failure(NotFound ~> Redirect("/blog/404")))
-      //case ContextPath(ctx, PostSeg(xs)) => failure(NotFound ~> Redirect("404"))
-    }
-  }
-  type PFResponse[A,B] = PartialFunction[HttpRequest[A],
-                            (HttpRequest[A] => Result[ResponseFunction[B],
-                                                      ResponseFunction[B]])]
-
-  def blogIntent3[A] = (t:(Scalate, Mongo, ConfiguredSegImpl)) => liftM(config =>
-    t match {
-      case (scalate, mongo, postSeg) => Directive.Intent[Any, Any] {
-        case ContextPath(ctx, postSeg(title :: Nil)) => (for {
-          _ <- GET
-          request <- Directives.request[Any]
-          postEntry <- Directive((_: HttpRequest[Any]) => postEntry[A](mongo)(title).run(config))
-        } yield postEntry).
-          flatMap(post => scalate("blogPost.scaml", "post" -> post.contents)).
-          orElse(failure(NotFound ~> Redirect("/blog/404")))
-      }.right[String]
-    })
+}
 
 object BlogPlan extends BlogIntents {
   def blogPlan[A]()(implicit
@@ -220,8 +184,7 @@ object BlogPlan extends BlogIntents {
       blogAPIPath <- ConfiguredSeg("blog.restPath", restAPIPath)
       blogPath <- ConfiguredSeg("blog.blogPath", blogPath)
       blogRest <- restIntent[A](config, mongo, blogAPIPath)
-     // blog <- blogIntent[A](scalate, config, mongo, blogPath)
-      blog <- blogIntent[A]((scalate, mongo, blogPath))
+      blog <- blogIntent[A](scalate, config, mongo, blogPath)
     } yield blog.orElse(blogRest)
   }
 }
