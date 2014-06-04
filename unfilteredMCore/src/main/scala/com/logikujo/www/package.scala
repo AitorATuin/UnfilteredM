@@ -44,6 +44,8 @@ package object www {
     }.asInstanceOf[Configuration @@ Tag]
   }
   type Config[Tag] = Configuration @@ Tag
+
+  // Reader Monad with Tagged Configuration
   type #>[Tag, R] = ReaderT[ErrorM, Config[Tag], R]
 
   // alias for \/ monad with String in the left.
@@ -59,11 +61,13 @@ package object www {
   // Lift a function from Tagged Configuration to Error
   def #>[Tag, R](f: Config[Tag] => ErrorM[R]): Tag #> R = Kleisli[ErrorM, Config[Tag], R](f)
   def liftM[A](f: Configuration => ErrorM[A]) = Kleisli[ErrorM, Configuration, A](f)
-  def liftServer[Tag] = #>[Tag, Server] _
+  // Just returns the configuration, ask function inside Reader Monad
+  def configM = Kleisli.ask[ErrorM, Configuration]
+
+
   def unfilteredM = liftM[Server]_
   def unfilteredPlanM = liftM[UnfilteredPlan]_
   def unfilteredIntentM = liftM[Plan.Intent]_
-  def unfilteredConfigM = Kleisli.ask[ErrorM, Configuration]
 
   // ReaderT overResultM, ResponseFunction[Any]
   type ResultM[+A] = Result[ResponseFunction[Any],A]

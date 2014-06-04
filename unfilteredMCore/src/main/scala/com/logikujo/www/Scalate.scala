@@ -20,9 +20,13 @@ import Scalaz._
 
 package object scalate {
   type UnfilteredScalateM = UnfilteredM[Scalate]
-  def unfilteredScalateM = liftM[Scalate]((c:Configuration) => (new Scalate {
+  def scalateM2 = liftM[Scalate]((c:Configuration) => (new Scalate {
     val config = c
   }).right[String])
+  def scalateM[Tag]: Tag #> Scalate = #> { c => new Scalate {
+    val config = c
+  }.right[String]
+  }
 
   sealed trait Scalate extends Logging {
     val config: Configuration
@@ -114,9 +118,3 @@ package object scalate {
     }
   }
 }
-
-/*object Scalate {
-  def apply():UnfilteredScalateM = unfilteredScalateM((c:Config) => (new Scalate {
-    val config = c
-  }).right[String])
-}*/

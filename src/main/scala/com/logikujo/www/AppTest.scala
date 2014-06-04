@@ -35,12 +35,12 @@ import org.slf4j.LoggerFactory
  *
  */
  // Http.configure(_ setFollowRedirects true)(url(s) OK as.String)}
-trait GitHook {
+object GitHook {
   trait Users {
     def auth(u: String, p: String): Boolean
   }
 
-  val logger = LoggerFactory.getLogger(classOf[GitHook])
+  val logger = LoggerFactory.getLogger(classOf[AppTest])
   private val githubUrl = "https://github.com/login/oauth/access_token"
 
   def contentType(tpe: String) =
@@ -78,8 +78,8 @@ trait GitHook {
   import com.logikujo.www._
   import com.logikujo.www.model.Mongo._
   import unfiltered.kit._
-  def gitHookPlan(): UnfilteredPlanM = for {
-    config <- unfilteredConfigM
+  def apply()  = for {
+    config <- configM
     //mongo <- unfilteredMongoM
     //gitHook <- kit.Auth.basic(validateUser)(gitHookIntent)
   } yield Auth.basic(validateUser)(gitHookIntent)
@@ -95,9 +95,9 @@ object InTest {
   implicit val config = Configuration[AppTest]("com.logikujo.apptest.test")
 }
 
-object AppTest extends GitHook {
+object Application  {
   import InProduction._
   def main(args: Array[String]) {
-    UnfilteredApp[AppTest]() ~> ("/" -> (gitHookPlan() :: Nil)) run()
+    UnfilteredApp[AppTest]() ~> ("/" -> (GitHook() :: Nil)) run()
   }
 }

@@ -179,8 +179,8 @@ object BlogPlan extends BlogIntents {
                     post: Post[A]) = {
     for {
       mongo <- unfilteredMongoM
-      scalate <- unfilteredScalateM
-      config <- unfilteredConfigM
+      scalate <- scalateM
+      config <- configM
       blogAPIPath <- ConfiguredSeg("blog.restPath", restAPIPath)
       blogPath <- ConfiguredSeg("blog.blogPath", blogPath)
       blogRest <- restIntent[A](config, mongo, blogAPIPath)

@@ -3,6 +3,7 @@ package com.logikujo.www
 import Implicits._
 import scalate._
 
+import unfiltered.filter.Plan
 import unfiltered.directives._
 import Directives._
 import unfiltered.response._
@@ -15,16 +16,16 @@ import unfiltered.filter.request._
  *
  */
 package object plans {
-  val RootPlan: UnfilteredPlanM = for {
-    scalate <- unfilteredScalateM
+  def RootPlan[Tag]: Tag #> Plan =  for {
+    scalate <- scalateM
   } yield Directive.Intent[Any,Any] {
      case ContextPath(ctx, "/") => success(Redirect("index"))
      case ContextPath(ctx, "/index.html") => success(Redirect("index"))
      case ContextPath(ctx, "/index") => scalate("index.scaml")
   }
 
-  val NotFoundPlan: UnfilteredPlanM = for {
-    scalate <- unfilteredScalateM
+  def NotFoundPlan[Tag]: Tag #> Plan = for {
+    scalate <- scalateM
   } yield Directive.Intent[Any, Any] {
       case ContextPath(ctx, path) =>
         scalate.render("404.scaml").map(NotFound ~> ResponseString(_))
