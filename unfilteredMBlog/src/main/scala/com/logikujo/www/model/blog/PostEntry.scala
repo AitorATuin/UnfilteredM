@@ -154,7 +154,7 @@ object PostEntry {
     }
 
     implicit object PostEntryAsMongoRecord extends MongoRecord[PostEntry] {
-      def col: Config => Mongo => BSONCollection = c => mongo => {
+      def col: Configuration => Mongo => BSONCollection = c => mongo => {
         val collectionName = c.opt[String]("blog.mongoCollection").getOrElse("posts")
         val db = mongo.conn("logikujo-web")
         db.collection(collectionName).as[BSONCollection]()

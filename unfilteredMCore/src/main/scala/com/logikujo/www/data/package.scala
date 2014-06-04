@@ -25,7 +25,7 @@ package object data {
     def map[A, B](fa: ResultM[A])(f: A => B): ResultM[B] = fa.map(f)
   }
 
-  implicit def configDirective(c: Config) = success(c)
+  implicit def configDirective(c: Configuration) = success(c)
 
   trait FuturableDirective[A,B,C] {
     val v: Future[DirectiveT]

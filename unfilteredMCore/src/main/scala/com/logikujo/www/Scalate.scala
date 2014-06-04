@@ -20,15 +20,15 @@ import Scalaz._
 
 package object scalate {
   type UnfilteredScalateM = UnfilteredM[Scalate]
-  def unfilteredScalateM = liftM[Scalate]((c:Config) => (new Scalate {
+  def unfilteredScalateM = liftM[Scalate]((c:Configuration) => (new Scalate {
     val config = c
   }).right[String])
 
   sealed trait Scalate extends Logging {
-    val config: Config
+    val config: Configuration
     type ToRenderContext =
     (String, JWriter, TemplateEngine) => Try[DefaultRenderContext]
-    lazy val defaultDir: File = config.get[Option[String]]("scalate.prefix").fold(new File(""))(new File(_))
+    lazy val defaultDir: File = config.config.get[Option[String]]("scalate.prefix").fold(new File(""))(new File(_))
     lazy val defaultTemplatesDir = config.opt[List[String]]("scalate.templatesDir").fold(Seq(defaultDir))(_.map(new File(_)))
     lazy val defaultLayoutsDir = config.opt[String]("scalate.layoutsDir").fold(new File(defaultDir, "layouts/"))(new File(_))
     lazy val defaultLayout = config.opt[String]("scalate.defaultLayout").getOrElse(defaultLayoutsDir.toString) + "/default.scaml"

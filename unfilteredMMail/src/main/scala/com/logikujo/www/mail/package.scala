@@ -21,8 +21,8 @@ package object mail {
   type UnfilteredMailM = UnfilteredM[SendMail]
 
   //def unfilteredMailM = liftM[SendMail]_
-  def unfilteredMailM = liftM[SendMail]((c: Config) => (new SendMail {
-    val config: Config = c
+  def unfilteredMailM = liftM[SendMail]((c: Configuration) => (new SendMail {
+    val config: Configuration = c
   }).right[String])
 
   implicit def stringToSeq(single: String): Seq[String] = Seq(single)
@@ -50,7 +50,7 @@ package object mail {
 
   // Instantiate as much as possible when creating it
   sealed trait SendMail {
-    val config: Config
+    val config: Configuration
 
     private def prepareEmail(smtp: String,
                              port: Int,
