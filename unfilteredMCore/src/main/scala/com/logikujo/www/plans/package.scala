@@ -16,18 +16,21 @@ import unfiltered.filter.request._
  *
  */
 package object plans {
-  def RootPlan[Tag]: Tag #> Plan =  for {
-    scalate <- scalateM
-  } yield Directive.Intent[Any,Any] {
-     case ContextPath(ctx, "/") => success(Redirect("index"))
-     case ContextPath(ctx, "/index.html") => success(Redirect("index"))
-     case ContextPath(ctx, "/index") => scalate("index.scaml")
+  def RootPlan[Tag]: Tag #> Plan =  {
+    val a = for {
+      scalate <- scalateM[Tag]
+    } yield Directive.Intent[Any,Any] {
+      case ContextPath(ctx, "/") => success(Redirect("index"))
+      case ContextPath(ctx, "/index.html") => success(Redirect("index"))
+      case ContextPath(ctx, "/index") => scalate("index.scaml")
+    }
+    a.as[Plan]
   }
 
-  def NotFoundPlan[Tag]: Tag #> Plan = for {
-    scalate <- scalateM
+  def NotFoundPlan[Tag]: Tag #> Plan = (for {
+    scalate <- scalateM[Tag]
   } yield Directive.Intent[Any, Any] {
       case ContextPath(ctx, path) =>
         scalate.render("404.scaml").map(NotFound ~> ResponseString(_))
-    }
+    }).as[Plan]
 }

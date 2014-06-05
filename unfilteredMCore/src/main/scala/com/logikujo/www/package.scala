@@ -3,6 +3,7 @@ package com.logikujo
 //import com.logikujo.www.plans.{NotFoundPlan, RootPlan}
 import unfiltered.jetty.{ContextBuilder, Server, Http}
 import com.github.kxbmap.configs._
+import unfiltered.Cycle._
 import unfiltered.filter._
 import unfiltered.directives.{Result, Directive}
 import unfiltered.response.ResponseFunction
@@ -10,6 +11,8 @@ import unfiltered.request.HttpRequest
 import com.typesafe.config.{ConfigFactory, Config}
 import scalaz._
 import Scalaz._
+import javax.servlet.{ServletResponse, ServletRequest}
+import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 
 /**
  *
@@ -20,15 +23,10 @@ import Scalaz._
  */
 package object www {
   object Implicits {
-    implicit def test[A,B](i:Plan.Intent):UnfilteredPlan = new UnfilteredPlan {
-      def intent = i
-    }
     implicit def toUnfilteredPlan(intentM:UnfilteredIntentM):UnfilteredPlanM =
       intentM map (i => new UnfilteredPlan {def intent = i})
     implicit def toUnfilteredIntentM(intent: Plan.Intent): UnfilteredIntentM =
       unfilteredIntentM(_ => intent.right)
-    //implicit def toUnfilteredConfigM(c: Config): UnfilteredConfigM =
-    //  unfilteredConfigM(_ => c.right)
   }
 
   // Confuration trait
@@ -89,16 +87,6 @@ package object www {
         ctx.current.setInitParameter("org.eclipse.jetty.servlet.Default.dirAllowed", "false")
         ctx.resources(new java.net.URL(getClass().getResource(assetsDir), "."))
       }).\/>("Unable to create server")}
-
-    def apply2[App](): UnfilteredApp = unfilteredM(
-      (c: Configuration) => (for {
-        serverPort <- c.get[Option[Int]]("serverPort").orElse(8080.some)
-        assetsMap <- c.get[Option[String]]("assetsMap").orElse("/assets".some)
-        assetsDir <- c.get[Option[String]]("assetsDir").orElse("/www/css".some)
-      } yield Http(serverPort).context(assetsMap) { ctx =>
-        ctx.current.setInitParameter("org.eclipse.jetty.servlet.Default.dirAllowed", "false")
-        ctx.resources(new java.net.URL(getClass().getResource(assetsDir), "."))
-      }).\/>("Unable to create server"))
   }
 
   object UnfilteredPlan {
@@ -111,7 +99,29 @@ package object www {
     //def apply(f: Config => Plan.Intent): UnfilteredPlanM = apply((c:Config) => f(c).right[String])
   }
 
-  trait UnfilteredMOps[App] {
+  trait UnfilteredMAs[A,B] {
+    def as(a:A):B
+  }
+
+  trait UnfilteredMAsOps[Tag, A] {
+    def value: Tag #> A
+    def as[B](implicit ev: UnfilteredMAs[A,B]): Tag #> B = value map ev.as _
+  }
+  implicit def asUnfilteredMAsOps[Tag, A](v: Tag #> A) = new UnfilteredMAsOps[Tag, A] {
+    def value = v
+  }
+
+  implicit object intentMAsPlanM extends UnfilteredMAs[unfiltered.Cycle.Intent[Any,Any], Plan] {
+    def as(a: unfiltered.Cycle.Intent[Any,Any]): Plan = new Plan { def intent = a }
+  }
+
+  /*trait IntentMOps[Tag] {
+    val value: Tag #> Plan.Intent
+    def asPlan: Tag #> Plan = value map (new Plan { def intent = _})
+  }*/
+  //implicit def asIntentMOps[Tag](v:Tag #> )
+
+  trait ServerMOps[App] {
     val value: App #> Server
     def ~>(mPlans: (String, List[App #> Plan])): App #> Server = {
       val (ctx, plans) = mPlans
@@ -123,8 +133,8 @@ package object www {
     def run()(implicit c: Config[App]) = value map (_.run()) run c
   }
 
-  implicit def unfilteredApp2Ops[App](v:App #> Server): UnfilteredMOps[App] =
-    new UnfilteredMOps[App] {
+  implicit def asServerMOps[App](v:App #> Server): ServerMOps[App] =
+    new ServerMOps[App] {
       val value = v
     }
 }
