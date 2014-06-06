@@ -180,7 +180,7 @@ object BlogPlan extends BlogIntents {
     for {
       mongo <- unfilteredMongoM
       scalate <- scalateM
-      config <- configM
+      config <- _configM
       blogAPIPath <- ConfiguredSeg("blog.restPath", restAPIPath)
       blogPath <- ConfiguredSeg("blog.blogPath", blogPath)
       blogRest <- restIntent[A](config, mongo, blogAPIPath)

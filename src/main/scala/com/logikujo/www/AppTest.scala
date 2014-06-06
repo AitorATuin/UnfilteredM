@@ -79,7 +79,7 @@ object GitHook {
   import com.logikujo.www.model.Mongo._
   import unfiltered.kit._
   def apply()  = for {
-    config <- configM
+    config <- _configM
     //mongo <- unfilteredMongoM
     //gitHook <- kit.Auth.basic(validateUser)(gitHookIntent)
   } yield Auth.basic(validateUser)(gitHookIntent)

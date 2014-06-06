@@ -44,7 +44,7 @@ package object www {
   type Config[Tag] = Configuration @@ Tag
 
   // Reader Monad with Tagged Configuration
-  type #>[Tag, R] = ReaderT[ErrorM, Config[Tag], R]
+  type #>[Tag, R] = Kleisli[ErrorM, Config[Tag], R]
 
   // alias for \/ monad with String in the left.
   type ErrorM[+A] = String \/ A
@@ -60,7 +60,8 @@ package object www {
   def #>[Tag, R](f: Config[Tag] => ErrorM[R]): Tag #> R = Kleisli[ErrorM, Config[Tag], R](f)
   def liftM[A](f: Configuration => ErrorM[A]) = Kleisli[ErrorM, Configuration, A](f)
   // Just returns the configuration, ask function inside Reader Monad
-  def configM = Kleisli.ask[ErrorM, Configuration]
+  def _configM = Kleisli.ask[ErrorM, Configuration]
+  def configM[Tag] = Kleisli.ask[ErrorM, Config[Tag]]
 
 
   def unfilteredM = liftM[Server]_
@@ -107,6 +108,7 @@ package object www {
     def value: Tag #> A
     def as[B](implicit ev: UnfilteredMAs[A,B]): Tag #> B = value map ev.as _
   }
+
   implicit def asUnfilteredMAsOps[Tag, A](v: Tag #> A) = new UnfilteredMAsOps[Tag, A] {
     def value = v
   }
@@ -114,12 +116,12 @@ package object www {
   implicit object intentMAsPlanM extends UnfilteredMAs[unfiltered.Cycle.Intent[Any,Any], Plan] {
     def as(a: unfiltered.Cycle.Intent[Any,Any]): Plan = new Plan { def intent = a }
   }
-
-  /*trait IntentMOps[Tag] {
-    val value: Tag #> Plan.Intent
-    def asPlan: Tag #> Plan = value map (new Plan { def intent = _})
+  implicit object intentMAsPlanM2 extends UnfilteredMAs[Plan.Intent, Plan] {
+    def as(a: Plan.Intent): Plan = new Plan { def intent = a }
+  }
+  /*implicit object intentMAsPlanM2 extends UnfilteredMAs[unfiltered.filter.Plan.Intent[Any,Any], Plan] {
+    def as(a: unfiltered.filter.Plan.Intent[Any,Any]): Plan = new Plan { def intent = a }
   }*/
-  //implicit def asIntentMOps[Tag](v:Tag #> )
 
   trait ServerMOps[App] {
     val value: App #> Server
