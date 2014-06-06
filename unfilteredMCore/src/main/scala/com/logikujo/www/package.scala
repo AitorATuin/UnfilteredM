@@ -34,17 +34,35 @@ package object www {
     val config: com.typesafe.config.Config
     def get[T: AtPath](path: String): T = config.get[T](path)
     def opt[T: AtPath](path: String): Option[T] = config.opt[T](path)
+    def resolv[A,T](implicit ev: A @@ T) = ev
+    def resolvMV[Tag, A, T](implicit ev: A @@ T) = #>[Tag, A @@ T](ev)
+    def resolvMF[Tag, A, T](implicit ev: Config[Tag] => ErrorM[A @@ T]) = #>[Tag, A @@ T](ev)
+    def resolvM[Tag, A, T](implicit ev:Config[Tag] => ErrorM[A @@ T]) = #>(ev)
   }
+
+  trait TaggedOps[A] {
+    val v:A
+    def withTag[Tag]: A @@ Tag = v.asInstanceOf[A @@ Tag]
+  }
+
+  implicit def asTaggedOps[A](a: A) = new TaggedOps[A] {
+    val v:A = a
+  }
+
   object Configuration {
-    def withTag[Tag](c:Configuration): Configuration @@ Tag = c.asInstanceOf[Configuration @@ Tag]
+    //def withTag[Tag](c:Configuration): Configuration @@ Tag = c.asInstanceOf[Configuration @@ Tag]
+    /*def apply[Tag](path: String) = new Configuration {
+      val config = ConfigFactory.load.getConfig(path)
+    }.asInstanceOf[Configuration @@ Tag]*/
     def apply[Tag](path: String) = new Configuration {
       val config = ConfigFactory.load.getConfig(path)
-    }.asInstanceOf[Configuration @@ Tag]
+    }.withTag[Tag]
   }
   type Config[Tag] = Configuration @@ Tag
 
   // Reader Monad with Tagged Configuration
   type #>[Tag, R] = Kleisli[ErrorM, Config[Tag], R]
+  type ##>[C, Tag, R] = Kleisli[ErrorM, C @@ Tag, R]
 
   // alias for \/ monad with String in the left.
   type ErrorM[+A] = String \/ A
@@ -56,8 +74,15 @@ package object www {
   type DirectiveAny[A,B] = Directive[Any, ResponseFunction[A], B]
   type DirectiveM[+A] = Directive[Any, ResponseFunction[Any], A]
   type UnfilteredDirectiveM[+A] = ReaderT[DirectiveM, Configuration, A]
-  // Lift a function from Tagged Configuration to Error
+
+  // Lift a function from Tagged Configuration to Kleisli
   def #>[Tag, R](f: Config[Tag] => ErrorM[R]): Tag #> R = Kleisli[ErrorM, Config[Tag], R](f)
+  def #>[Tag, R](v: R): Tag #> R = #>(_ => v.right[String])
+
+  // Lift a function from Tagger C to Kleisli
+  def ##>[C, Tag, R](f: C @@ Tag => ErrorM[R]) = Kleisli[ErrorM, C @@ Tag, R](f)
+  def ##>[C, Tag, R](v: R): ##>[C, Tag, R] = ##>(_ => v.right[String])
+
   def liftM[A](f: Configuration => ErrorM[A]) = Kleisli[ErrorM, Configuration, A](f)
   // Just returns the configuration, ask function inside Reader Monad
   def _configM = Kleisli.ask[ErrorM, Configuration]
@@ -79,7 +104,7 @@ package object www {
   trait UnfilteredPlan extends Plan
 
   object UnfilteredApp {
-    def apply[App](): App #> Server = #> { c =>
+    def apply[App](): App #> Server = #> { (c: Config[App]) =>
       (for {
         serverPort <- c.get[Option[Int]]("serverPort").orElse(8080.some)
         assetsMap <- c.get[Option[String]]("assetsMap").orElse("/assets".some)

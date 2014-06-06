@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory
 import scala.concurrent.{Future, Await}
 import scala.concurrent.duration._
 import scala.concurrent.duration.{Duration => Dur}
+import dispatch._
 
 sealed case class PostEntry(title: String, contents: String, publishDate: DateTime) {
   lazy val id = title.trim.replace(" ", "_").toLowerCase
@@ -107,6 +108,10 @@ object PostEntry {
         contents <- \/-(Render as HTML from doc.content toString)
       } yield PostEntry(title, contents, date)
     }
+  def fromURL(u: String) = {
+    val data = Try {Http.configure(_ setFollowRedirects true)(url(u) OK as.String)}
+    val a = data ∘ (_ ∘ (fromString(_)))
+  }
 
   object Implicits {
     import model.Implicits._

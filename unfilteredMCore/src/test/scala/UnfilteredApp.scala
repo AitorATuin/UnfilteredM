@@ -42,6 +42,8 @@ class UnfilteredTest extends UnitSpec {
   trait UnfilteredAppTest {
     val serverM = UnfilteredApp[TestApp]()
   }
+
+  // TODO: Allow #>(C => R) with R != \/
   trait UnfilteredIntentTest {
     // Cycle Intents
     val intentCycleM1 = for {
@@ -49,9 +51,14 @@ class UnfilteredTest extends UnitSpec {
     } yield Directive.Intent[Any,Any] {
         case _ => success(ResponseString("intentCycleM1 Test"))
     }
-    val intentCycleM2 = #>[TestApp, Cycle.Intent[Any,Any]](c => (Directive.Intent[Any,Any] {
-      case _ => success(ResponseString("intentCycleM2 Test"))
-    }).right[String])
+    val intentCycleM2 = #>[TestApp, Cycle.Intent[Any,Any]]((_:Config[TestApp]) =>
+      Directive.Intent[Any,Any] {
+        case _ => success(ResponseString("intentCycleM2 Test"))
+      }.right[String])
+
+    val intentCycleM3 = #>[TestApp, Cycle.Intent[Any, Any]](Directive.Intent[Any,Any] {
+      case _ => success(ResponseString("intentCycleM3 Test"))
+    })
 
     // Plain Intents
     val intentPlanM1 = for {
@@ -59,9 +66,34 @@ class UnfilteredTest extends UnitSpec {
     } yield unfiltered.filter.Intent {
       case _ => ResponseString("intentPlanM1 Test")
     }
-    val intentPlanM2 = #>[TestApp, Plan.Intent](c => (Intent {
-      case _ => ResponseString("intentPlanM2 Test")
-    }).right[String])
+    val intentPlanM2 = #>[TestApp, Plan.Intent]((_:Config[TestApp]) =>
+      Intent {
+        case _ => ResponseString("intentPlanM2 Test")
+      }.right[String])
+
+    val intentPlanM3 = #>[TestApp, Plan.Intent](Intent {
+      case _ => ResponseString("intentPlanM3 Test")
+    })
+  }
+
+  trait TaggedKleisli {
+    trait Trait1
+    trait Trait2
+    trait Tag1
+    trait Tag2
+
+    val tagged1 = ##>[Trait1, Tag1, Int]{(t: Trait1 @@ Tag1) => 2.right[String]}
+    val tagged2 = ##>[Trait1, Tag2, Plan.Intent](Intent {
+      case _ => ResponseString("taggedIntent2 Test")
+    })
+    val tagged3 = ##>[Trait2, Tag1, Cycle.Intent[Any, Any]](Directive.Intent[Any, Any] {
+      case _ => success(ResponseString("taggedIntent3 Test"))
+    })
+    val tagged4 = ##>[Trait2, Tag2, Cycle.Intent[Any, Any]](
+      (c: Trait2 @@ Tag2) => Directive.Intent[Any, Any] {
+        case _ => success(ResponseString("taggedIntent4 Test"))
+      }.right[String]
+    )
   }
 
   "UnfilteredApp" should
@@ -94,5 +126,13 @@ class UnfilteredTest extends UnitSpec {
   it should "be able to be used as a TestApp #> Plan" in new UnfilteredIntentTest{
     intentPlanM1.as[Plan] should be (anInstanceOf[TestApp #> Plan])
     intentPlanM2.as[Plan] should be (anInstanceOf[TestApp #> Plan])
+  }
+
+  "Kleisli with tagged values" should
+    "be able to be created, resulting in ##>[Type, Tag, Result]" in new TaggedKleisli {
+      tagged1 should be (anInstanceOf[##>[Trait1, Tag1, Int]])
+      tagged2 should be (anInstanceOf[##>[Trait1, Tag2, Plan.Intent]])
+      tagged3 should be (anInstanceOf[##>[Trait2, Tag1, Cycle.Intent[Any, Any]]])
+      tagged3 should be (anInstanceOf[##>[Trait2, Tag2, Cycle.Intent[Any, Any]]])
   }
 }
