@@ -71,6 +71,19 @@ object GitHook {
     } yield addedItemsArray.flatten.map(_.toString)
   }
 
+  def getPostsFromUrl[A](config: Config[A])(urls: List[String]) = {
+    val url = for {
+      repoBase <- config.opt[String]("blog.repoBase")
+      urlBase <- config.opt[String]("blog.urlBase")
+    } yield urlBase + "/" + repoBase
+    url.
+      some((url: String) => {
+      val k = urls.map(p => p -> (PostEntry.fromURL(s"${url}/${p}") map (_())))
+      result[ResponseFunction[Any], List[(String, \/[String, PostEntry])]](RSuccess(k))
+    }).
+      none(result[ResponseFunction[Any], List[(String, \/[String, PostEntry])]](RFailure(BadRequest)))
+  }
+
   def gitHookIntent[A](dao: DAO @@ A)(config: Config[AppTest]) =
     Directive.Intent[Any, Any] {
       case ContextPath(ctx, Seg("githook" :: Nil)) => for {
@@ -79,8 +92,12 @@ object GitHook {
         _ <- contentType("application/json")
         json <- asJson(Body string r)
         addedPosts <- addedPostsFromJson(json)
-        result <- addedPosts.getOrElse(List()).map(_ => )
-      } yield Ok ~> ResponseString((~ addedPosts).mkString("|"))
+        result <- getPostsFromUrl(config)(addedPosts.getOrElse(List()))
+      } yield {
+        val fails = result.filter { case (_, -\/(_)) => true}
+        val success = result.filter { case (_, \/-(_)) => true}
+        Ok ~> ResponseString(s"Success: ${success.length} posts; Error: ${fails.length} posts")
+      }
     }
 
   def gitHook[A] = ##>[DAO, A, #>[AppTest, Cycle.Intent[Any, Any]]](
@@ -138,14 +155,17 @@ import reactivemongo.api._
       }).withTag[Tag]
   }
 object InProduction {
-  implicit val config = Configuration[AppTest]("com.logikujo.apptest")
-  implicit val postsDAO =
-    MongoDAO[PostEntry, PostEntry](List("localhos"))("logikujo-web")("posts")
-  implicit val postsDAO2 = (c:Config[AppTest]) => {
+  def getCol(config: Config[AppTest]) = {
     val connName = config.opt[List[String]]("mongo.connection").getOrElse(List("127.0.0.1"))
-    val collName = c.opt[String]("blog.mongoCollection").getOrElse("posts")
-    val dbName = c.opt[String]("blog.mongoDatabase").getOrElse("logikujoDB")
-    MongoDAO[PostEntry, PostEntry](connName)(dbName)(collName).right[String]
+    val collName = config.opt[String]("blog.mongoCollection").getOrElse("posts")
+    val dbName = config.opt[String]("blog.mongoDatabase").getOrElse("logikujoDB")
+    (connName, collName, dbName)
+  }
+  implicit val config = Configuration[AppTest]("com.logikujo.apptest")
+  /*implicit val usersDAO =
+    MongoDAO[User, User](List("localhost"))("logikujo-web")("posts")*/
+  implicit val postDAO = (c:Config[AppTest]) => getCol(c) match {
+    case (con, col, db) => MongoDAO[PostEntry, PostEntry](con)(col)(db)
   }
 }
 

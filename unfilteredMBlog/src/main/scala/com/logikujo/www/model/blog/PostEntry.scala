@@ -75,7 +75,8 @@ object PostEntry {
     private def getTitle(m: HeadersMarkup)(doc: Documents.Document) =
       m("title") ||| {
         val t = doc.title.map(Render as HTML from _ toString)
-        if (t.isEmpty) "Couldnt get title".failureNel[String] else (t mkString).successNel[String]
+        if (t.isEmpty) "Couldnt get title".failureNel[String]
+        else (t mkString).successNel[String]
       }
 
     private def getDate(m: HeadersMarkup)(doc: Documents.Document) =
@@ -110,7 +111,14 @@ object PostEntry {
     }
   def fromURL(u: String) = {
     val data = Try {Http.configure(_ setFollowRedirects true)(url(u) OK as.String)}
-    val a = data ∘ (_ ∘ (fromString(_)))
+    val k = data map (_ map (fromString(_) match {
+      case \/-(s) => s
+      case -\/(f) => throw new Exception(f.toList.mkString("\n"))
+    }))
+    k match {
+      case scala.util.Success(s) => \/-(s)
+      case scala.util.Failure(t) => -\/(t.toString)
+    }
   }
 
   object Implicits {
