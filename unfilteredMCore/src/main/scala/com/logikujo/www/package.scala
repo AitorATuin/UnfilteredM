@@ -57,6 +57,9 @@ package object www {
     def apply[Tag](path: String) = new Configuration {
       val config = ConfigFactory.load.getConfig(path)
     }.withTag[Tag]
+    def apply[Tag]() = new Configuration {
+      val config = ConfigFactory.empty()
+    }.withTag[Tag]
   }
   type Config[Tag] = Configuration @@ Tag
 
