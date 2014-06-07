@@ -34,6 +34,7 @@ trait MongoRecord[A] {
     liftM(col(_)(mongo).insert(a).right[String])
 }
 
+// TODO: Remove
 sealed trait Mongo {
   val logger = LoggerFactory.getLogger(classOf[Mongo])
 
@@ -42,6 +43,30 @@ sealed trait Mongo {
   lazy val conn = driver.connection(config.opt[List[String]]("mongo.connection").getOrElse(List("127.0.0.1")))
 }
 
+trait MongoDBDAO extends DAO {
+  val col: BSONCollection
+
+  def insert[A](a: A)(implicit ev: BSONDocumentWriter[A]) =
+    col.insert(a: A) map (e => e.ok.
+      ?(e.errMsg.getOrElse("Unknow Error").left[A]).
+      |(a.right[String]))
+
+  def findOne[A](query: (String, String)*)(implicit ev: BSONDocumentReader[A]) =
+    col.find((BSONDocument() /: query.toList)(_ ++ _)).one[A]
+}
+
+object MongoDBDAO {
+  def apply[Tag](conn: List[String])(db: String)(coll: String) =
+    (new MongoDBDAO {
+      val col = {
+        val driver = MongoDriver()
+        val con = driver.connection(conn)
+        val d = con(db)
+        val col = d.collection(coll).as[BSONCollection]()
+        col
+      }
+    }).withTag[Tag]
+}
 
 object Mongo  {
   val logger = LoggerFactory.getLogger(classOf[Mongo])
