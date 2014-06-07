@@ -26,7 +26,9 @@ object UnfilteredMCoreSettings extends WithResolvers {
     "net.databinder.dispatch" %% "dispatch-core" % "0.11.0",
     "com.github.nscala-time" %% "nscala-time" % "0.8.0",
     "org.reactivemongo" %% "reactivemongo" % "0.11.0-SNAPSHOT",
-    "org.scalatest" % "scalatest_2.10" % "1.9.1" % "test"
+    "org.scalatest" % "scalatest_2.10" % "1.9.1" % "test",
+    "org.scalamock" %% "scalamock-scalatest-support" % "3.0.1" % "test",
+    "org.mockito" % "mockito-core" % "1.8.5" % "test"
   )
   val resolversM = Seq(
     "sonatype-public" at "https://oss.sonatype.org/content/groups/public",
