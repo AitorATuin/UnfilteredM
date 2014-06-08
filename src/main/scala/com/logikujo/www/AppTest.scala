@@ -3,7 +3,7 @@ package com.logikujo.www
 import Implicits._
 import data.TriedDirective._
 import plans._
-import plans.blog.BlogPlan._
+import plans.blog._
 import model._
 import model.blog.PostEntry
 import model.blog.PostEntry.Implicits._
@@ -163,7 +163,7 @@ object InProduction {
 }
 
 object InTest {
-  implicit val config = Configuration[AppTest]("com.logikujo.apptest.test")
+  //implicit val config = Configuration[AppTest]("com.logikujo.apptest.test")
 }
 
 object Application  {
@@ -171,6 +171,7 @@ object Application  {
   def main(args: Array[String]) {
      UnfilteredApp[AppTest]() ~>
        ("/" -> (
+                BlogPlan[AppTest, PostEntry].as[async.Plan] ::
                 RootPlan[AppTest] ::
                 NotFoundPlan[AppTest] ::
                 Nil)) ~>
