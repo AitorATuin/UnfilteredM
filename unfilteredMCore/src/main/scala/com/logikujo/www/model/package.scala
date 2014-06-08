@@ -7,6 +7,8 @@ import org.joda.time.DateTime
 import scala.concurrent.Future
 import reactivemongo.api.collections.default.BSONCollection
 import scala.concurrent.ExecutionContext.Implicits.global
+import scalaz._
+import scalaz._
 
 /**
  *
@@ -43,17 +45,11 @@ package object model {
     def insert[A](a:A): ErrorM[A]
   }
 
-  trait DBDAO[DB] {
-    def insert[A](a:A) : A
+  trait DBDAO {
   }
 
   // TODO: Allow several types on the query tuple, now only Strings are allowed
   trait DAO {
-    //def insert[A](a:A): ErrorM[A]
-    //def update[A](a:A): ErrorM[A]
-    //def delete[A](a:A): ErrorM[A]
-    //def read[A](query:(String, Any)*): ErrorM[A]
-    //def findOne[DB](query:(String, String)*): Future[Option[A]]
-    //def insert[DB](implicit ev: DBDAO[DB])// = ev.insert _ //(a:A): Future[ErrorM[A]]
   }
+
 }
