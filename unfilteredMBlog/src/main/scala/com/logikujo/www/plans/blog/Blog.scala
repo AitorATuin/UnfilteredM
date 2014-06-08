@@ -78,6 +78,7 @@ object BlogPlan extends BlogIntents {
         } yield AsyncResponse(postEntry) {
           case SSuccess(post) =>
             logger.debug("Aqui estamos")
+            // Todo: renderString to response should be done in scalate with a function
             post.
               ?(scalate.renderString(request, "blogPost.scaml", "post" -> post.get.toString) match {
                 case SSuccess(page) => Ok ~> ResponseString(page)
