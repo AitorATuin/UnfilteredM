@@ -4,6 +4,7 @@ package com.logikujo
 import unfiltered.jetty.{ContextBuilder, Server, Http}
 import com.github.kxbmap.configs._
 import unfiltered.Cycle._
+import unfiltered.Async
 import unfiltered.filter._
 import unfiltered.directives.{Result, Directive}
 import unfiltered.response.ResponseFunction
@@ -141,11 +142,18 @@ package object www {
     def value = v
   }
 
-  implicit object intentMAsPlanM extends UnfilteredMAs[unfiltered.Cycle.Intent[Any,Any], Plan] {
+  implicit object intentMAsPlanM1 extends UnfilteredMAs[unfiltered.Cycle.Intent[Any,Any], Plan] {
     def as(a: unfiltered.Cycle.Intent[Any,Any]): Plan = new Plan { def intent = a }
   }
   implicit object intentMAsPlanM2 extends UnfilteredMAs[Plan.Intent, Plan] {
     def as(a: Plan.Intent): Plan = new Plan { def intent = a }
+  }
+  implicit object intentMAsPlanM3 extends UnfilteredMAs[Async.Intent[HttpServletRequest, HttpServletResponse], async.Plan] {
+    def as(a:Async.Intent[HttpServletRequest, HttpServletResponse]): async.Plan = new async.Plan {def intent = a}
+  }
+
+  implicit object planAsInittedFilter extends UnfilteredMAs[Async.Intent[HttpServletRequest, HttpServletResponse], InittedFilter] {
+    def as(a:Async.Intent[HttpServletRequest, HttpServletResponse]): InittedFilter = a.asInstanceOf[InittedFilter]
   }
   /*implicit object intentMAsPlanM2 extends UnfilteredMAs[unfiltered.filter.Plan.Intent[Any,Any], Plan] {
     def as(a: unfiltered.filter.Plan.Intent[Any,Any]): Plan = new Plan { def intent = a }
@@ -153,7 +161,7 @@ package object www {
 
   trait ServerMOps[App] {
     val value: App #> Server
-    def ~>(mPlans: (String, List[App #> Plan])): App #> Server = {
+    def ~>(mPlans: (String, List[App #> InittedFilter])): App #> Server = {
       val (ctx, plans) = mPlans
       for {
         server <- value
