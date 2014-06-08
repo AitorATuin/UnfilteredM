@@ -18,6 +18,13 @@ import Directives._
 import scalaz._
 import Scalaz._
 
+/*
+ *  TODO: Refactor this class completely
+ *  Currently render supports only Directives and Try[String]
+ *  Add support for ReponseFunction
+ *
+ */
+
 package object scalate {
   type UnfilteredScalateM = UnfilteredM[Scalate]
   def scalateM2 = liftM[Scalate]((c:Configuration) => (new Scalate {
@@ -66,7 +73,7 @@ package object scalate {
       Failure(t)
     }).map(_.toString)
 
-    def renderScalate[A, B](request: HttpRequest[A],
+    def renderString[A, B](request: HttpRequest[A],
                             template: String,
                             attributes: (String, Any)*)
                            (implicit
@@ -75,27 +82,46 @@ package object scalate {
                             additionalAttributes: Seq[(String, Any)] = Nil
                              ) = {
       val renderedString = for {
-      //te <- Try { engine.load(template, bindings)}
-        context <- Try {
-          contextBuilder(Path(request), engine)
-        }
+        context <- Try{contextBuilder(Path(request), engine)}
         page <- renderPage(engine, context, template, attributes)
       } yield page
-      TriedDirective.successOrElse(renderedString, {
+      renderedString
+      /*TriedDirective.successOrElse(renderedString, {
         case e: Throwable if engine.isDevelopmentMode =>
           val str = new StringWriter
           e.printStackTrace(new PrintWriter(str))
           str.close()
           InternalServerError ~> ResponseString(str.toString)
-        case e: Throwable => InternalServerError ~> ResponseString("No implementado!")
-      })
+        case e: Throwable => InternalServerError ~> ResponseString("Not implemented!")
+      })*/
     }
 
-    def render(path: String, attributes: (String, Any)*) = for {
-      _ <- GET
-      r <- Directives.request[Any]
-      page <- renderScalate(r, path, attributes: _*)
-    }  yield page
+    def renderScalate[A, B](request: HttpRequest[A],
+                            template: String,
+                            attributes: (String, Any)*)
+                            (implicit
+                            engine: TemplateEngine = defaultEngine,
+                            bindings: List[Binding] = Nil,
+                            additionalAttributes: Seq[(String, Any)] = Nil
+                            ) =
+      TriedDirective.successOrElse(renderString(request, template, attributes:_*), {
+        case e: Throwable if engine.isDevelopmentMode =>
+          val str = new StringWriter
+          e.printStackTrace(new PrintWriter(str))
+          str.close()
+          InternalServerError ~> ResponseString(str.toString)
+        case e: Throwable => InternalServerError ~> ResponseString("Not implemented!")
+      })
+
+    //def renderString(req:HttpRequest[Any], template: String, attributes: (String, Any)*) =
+
+    def render(path: String, attributes: (String, Any)*) = {
+      for {
+        _ <- GET
+        r <- Directives.request[Any]
+        page <- renderScalate(r, path, attributes: _*)
+      }  yield page
+    }
 
     def apply(path: String, attributes: (String, Any)*): Directive[Any, ResponseFunction[Any], ResponseFunction[Any]] =
       render(path, attributes:_*).map(Ok ~> ResponseString(_))
