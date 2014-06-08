@@ -102,7 +102,7 @@ object GitHook {
 
   def gitHookIntent[A](dao: MongoDBDAO @@ A)(config: Config[AppTest]) =
     AsyncDirective[Any, List[Try[LastError]]] {
-      case ContextPath(ctx, Seg("githook" :: Nil)) => for {
+      case ContextPath(ctx, Seg("blog" :: Nil)) => for {
         _                   <- POST
         r                   <- unfiltered.directives.Directives.request[Any]
         _                   <- contentType("application/json")
@@ -138,31 +138,6 @@ object GitHook {
       else false
     }).right[String])
 
-  import unfiltered.kit._
-  import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
-  object Auth {
-    def defaultFail(realm: String) = Unauthorized ~> WWWAuthenticate("""Basic realm="%s"""" format realm)
-    def basic[A,B](is: (String, String) => Boolean, realm: String = "secret")(
-      intent: unfiltered.Async.Intent[HttpServletRequest,HttpServletResponse],
-      onFail: ResponseFunction[HttpServletResponse] = defaultFail(realm)): unfiltered.Async.Intent[HttpServletRequest, HttpServletResponse] = {
-        case req@BasicAuth(u, p) if (is(u, p)) => intent(req)
-        case req@_ => req.respond(onFail)
-     }
-
-
-    /*  asynPlan.Intent {intent match {
-        case BasicAuth(u,p) if (is(u,p)) =>
-        case _ => onFail
-      }
-        { _ => Pass },
-        {
-          case (BasicAuth(u, p), rf) => if(is(u,p)) rf else onFail
-          case _ => onFail
-        }
-      )
-    }*/
-  }
-
   def apply[A]()(implicit ev: Config[AppTest] => ErrorM[MongoDBDAO @@ A]) = for {
     config <- configM[AppTest]
     mongo <- config.resolvM[AppTest,MongoDBDAO, A]
@@ -194,6 +169,11 @@ object InTest {
 object Application  {
   import InProduction._
   def main(args: Array[String]) {
-     UnfilteredApp[AppTest]() ~> ("/" -> (GitHook[PostEntry]().as[async.Plan] :: Nil)) run()
+     UnfilteredApp[AppTest]() ~>
+       ("/" -> (
+                RootPlan[AppTest] ::
+                NotFoundPlan[AppTest] ::
+                Nil)) ~>
+       ("/hook" -> (GitHook[PostEntry]().as[async.Plan] :: Nil)) run()
   }
 }
