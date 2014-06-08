@@ -8,6 +8,7 @@ import model._
 import model.blog.PostEntry
 import model.blog.PostEntry.Implicits._
 import reactivemongo.api.collections.default.BSONCollection
+import reactivemongo.core.commands.LastError
 
 //import data.blog._
 import AsyncDirective._
@@ -17,6 +18,7 @@ import com.typesafe.config._
 import unfiltered.Cycle
 import unfiltered.response._
 import unfiltered.request._
+import unfiltered.filter._
 import unfiltered.filter.request._
 import unfiltered.directives.{data => udata}
 import unfiltered.directives._
@@ -24,6 +26,7 @@ import Directives._
 import Result.{Success => RSuccess, Failure => RFailure}
 
 import scala.concurrent.Future
+import scala.util.{Success => TSuccess, Failure => TFailure, Try}
 
 import argonaut._
 import Argonaut._
@@ -56,11 +59,12 @@ object GitHook {
   // Parse a json
   def asJson(str: String) = {
     val json = Parse.parse(str)
-    when { case _ if json.isRight => json.toOption.get} orElse BadRequest
+    when { case _ if json.isRight => json.toOption.get} orElse BadRequest ~> ResponseString("Bad json")
   }
 
+  // TODO: dev mode responses?
   def parseJson[A](v:Option[A]) =
-    when { case _ if v.isDefined => v } orElse BadRequest
+    when { case _ if v.isDefined => v } orElse BadRequest ~> ResponseString("Bad json")
 
   def addedPostsFromJson(json: Json) = parseJson {
     for {
@@ -68,105 +72,109 @@ object GitHook {
       commitsArray    <- commits.array
       addedItems      <- commitsArray.map(_.fieldOrEmptyArray("added")).some
       addedItemsArray <- addedItems.map(_.arrayOrEmpty).some
-    } yield addedItemsArray.flatten.map(_.toString)
+    } yield addedItemsArray.flatten.map(_.stringOr(""))
   }
 
   def getPostsFromUrl[A](config: Config[A])(urls: List[String]) = {
+    type ListsResult = (List[Future[PostEntry]], List[String])
     val url = for {
       repoBase <- config.opt[String]("blog.repoBase")
       urlBase <- config.opt[String]("blog.urlBase")
     } yield urlBase + "/" + repoBase
     url.
       some((url: String) => {
-      val k = urls.map(p => p -> (PostEntry.fromURL(s"${url}/${p}") map (_())))
-      result[ResponseFunction[Any], List[(String, \/[String, PostEntry])]](RSuccess(k))
-    }).
-      none(result[ResponseFunction[Any], List[(String, \/[String, PostEntry])]](RFailure(BadRequest)))
+        val (ss,fs) = urls.map(p => PostEntry.fromURL(s"${url}/${p}").leftMap(p + "::" + _)) partition {
+          case \/-(f) => true
+          case _ => false
+        }
+        result[ResponseFunction[Any], ListsResult](RSuccess((ss.map(_.toOption.get), fs.map(_.swap.toOption.get))))
+      }).
+      none(result[ResponseFunction[Any], ListsResult](RFailure(NotImplemented ~> ResponseString("Service not available"))))
   }
 
-  def gitHookIntent[A](dao: DAO @@ A)(config: Config[AppTest]) =
-    Directive.Intent[Any, Any] {
+  def mySuccess[A](v: \/[String,A]) = v match {
+    case \/-(a) => success(a)
+    case -\/(e) => failure(BadRequest ~> ResponseString(e))
+  }
+
+  def futureToFutureTry[A](f: Future[A]): Future[Try[A]] =
+    f.map(TSuccess(_)).recover { case x => TFailure(x) }
+
+  def gitHookIntent[A](dao: MongoDBDAO @@ A)(config: Config[AppTest]) =
+    AsyncDirective[Any, List[Try[LastError]]] {
       case ContextPath(ctx, Seg("githook" :: Nil)) => for {
-        _ <- POST
-        r <- unfiltered.directives.Directives.request[Any]
-        _ <- contentType("application/json")
-        json <- asJson(Body string r)
-        addedPosts <- addedPostsFromJson(json)
-        result <- getPostsFromUrl(config)(addedPosts.getOrElse(List()))
-      } yield {
-        val fails = result.filter { case (_, -\/(_)) => true}
-        val success = result.filter { case (_, \/-(_)) => true}
-        Ok ~> ResponseString(s"Success: ${success.length} posts; Error: ${fails.length} posts")
+        _                   <- POST
+        r                   <- unfiltered.directives.Directives.request[Any]
+        _                   <- contentType("application/json")
+        json                <- asJson(Body string r)
+        addedPosts          <- addedPostsFromJson(json)
+        (parsedS, parsedF)  <- getPostsFromUrl(config)(addedPosts.getOrElse(List()))
+        result              <- success(parsedS.map(for {
+                              p <- _
+                              r <- dao.insert(p)
+                            } yield r).map(f => futureToFutureTry(f)))
+        resultAsFuture <- success(Future.sequence(result))
+      } yield AsyncResponse(resultAsFuture) {
+          case TSuccess(l) =>
+            val (insertedS, insertedF) = l partition {
+              case TSuccess(_) => true
+              case _ => false
+            }
+            logger.debug("Errors:" + (insertedF ++ parsedF).toString)
+            logger.debug(insertedS.toString)
+            Ok ~> ResponseString(s"Success: ${insertedS.length} posts; Error: ${(insertedF ++ parsedF).length} posts")
+          case TFailure(e) => BadRequest ~> ResponseString("Unexpected error") // should never reach this point
       }
     }
 
-  def gitHook[A] = ##>[DAO, A, #>[AppTest, Cycle.Intent[Any, Any]]](
-    (dao:DAO @@ A) => #>[AppTest, Cycle.Intent[Any, Any]](
+  def gitHook[A] = ##>[MongoDBDAO, A, #>[AppTest, async.Plan.Intent]](
+    (dao:MongoDBDAO @@ A) => #>[AppTest, async.Plan.Intent](
       (config:Config[AppTest]) =>
         gitHookIntent(dao)(config).right[String]).right[String])
 
-  val validateUser = (user:String, pass:String) => true
+  val validateUser = #>[AppTest, (String, String) => Boolean]((c: Config[AppTest]) =>
+    ((user:String, pass:String) => {
+      if (user.some == c.opt[String]("blog.gihubUser") && pass.some == c.opt[String]("blog.gitPass")) true
+      else false
+    }).right[String])
 
   import unfiltered.kit._
-  def apply[A]()(implicit ev: Config[AppTest] => ErrorM[MongoDAO[A] @@ A]) = for {
+
+  object Auth {
+    def defaultFail(realm: String) = Unauthorized ~> WWWAuthenticate("""Basic realm="%s"""" format realm)
+    def basic[A,B](is: (String, String) => Boolean, realm: String = "secret")(
+      intent: unfiltered.Async.Intent[A,B], onFail: ResponseFunction[B] = defaultFail(realm)) = {
+      intent.fold(
+        { _ => Pass },
+        {
+          case (BasicAuth(u, p), rf) => if(is(u,p)) rf else onFail
+          case _ => onFail
+        }
+      )
+    }
+  }
+
+  def apply[A]()(implicit ev: Config[AppTest] => ErrorM[MongoDBDAO @@ A]) = for {
     config <- configM[AppTest]
-    mongo <- config.resolvM[AppTest,MongoDAO[A], A]
+    mongo <- config.resolvM[AppTest,MongoDBDAO, A]
     hook <- gitHook[A].run(mongo).toOption.get // It's safe, it's always right
-  } yield Auth.basic(validateUser)(hook)
+    validate <- validateUser
+  } yield hook
 }
 
 trait AppTest
 
-import reactivemongo.bson._
-import reactivemongo.api._
- trait MongoDAO[A] extends DAO {
-    val writer: BSONDocumentWriter[A]
-    val reader: BSONDocumentReader[A]
-    val col: BSONCollection
-
-    private def insertMongo(a: A)(implicit ev: BSONDocumentWriter[A]) =
-      col.insert(a: A) map (e => e.ok.
-        ?(e.errMsg.getOrElse("Unknow Error").left[A]).
-        |(a.right[String]))
-
-    private def findOneMongo(query: (String, String)*)(implicit ev: BSONDocumentReader[A]) =
-      col.find((BSONDocument() /: query.toList)(_ ++ _)).one[A]
-
-    def insert(a: A) = insertMongo(a)(writer)
-
-    def findOne(query: (String, String)*) = findOneMongo(query: _*)(reader)
-  }
-
-
-  object MongoDAO {
-    def apply[Tag, A](conn: List[String])(db: String)(coll: String)
-                     (implicit r: BSONDocumentReader[A],
-                               w: BSONDocumentWriter[A]) =
-      (new MongoDAO[A] {
-        val reader = implicitly[BSONDocumentReader[A]]
-        val writer = implicitly[BSONDocumentWriter[A]]
-        val col = {
-          val driver = MongoDriver()
-          val con = driver.connection(conn)
-          val d = con(db)
-          val col = d.collection(coll).as[BSONCollection]()
-          col
-        }
-      }).withTag[Tag]
-  }
 object InProduction {
   def getCol(config: Config[AppTest]) = {
     val connName = config.opt[List[String]]("mongo.connection").getOrElse(List("127.0.0.1"))
-    val collName = config.opt[String]("blog.mongoCollection").getOrElse("posts")
-    val dbName = config.opt[String]("blog.mongoDatabase").getOrElse("logikujoDB")
-    (connName, collName, dbName)
+    val collName = config.opt[String]("blog.mongo.collection").getOrElse("posts")
+    val dbName = config.opt[String]("blog.mongo.database").getOrElse("logikujoDB")
+    (connName, dbName, collName)
   }
   implicit val config = Configuration[AppTest]("com.logikujo.apptest")
-  /*implicit val usersDAO =
-    MongoDAO[User, User](List("localhost"))("logikujo-web")("posts")*/
-  implicit val postDAO = (c:Config[AppTest]) => getCol(c) match {
-    case (con, col, db) => MongoDAO[PostEntry, PostEntry](con)(col)(db)
-  }
+  implicit val postDAO = (c:Config[AppTest]) => (getCol(c) match {
+    case (con, col, db) => MongoDBDAO[PostEntry](con)(col)(db)
+  }).right[String]
 }
 
 object InTest {
@@ -176,6 +184,8 @@ object InTest {
 object Application  {
   import InProduction._
   def main(args: Array[String]) {
-   // UnfilteredApp[AppTest]() ~> ("/" -> (GitHook() :: Nil)) run()
+    import unfiltered._
+    import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
+    UnfilteredApp[AppTest]() ~> ("/" -> (GitHook[PostEntry]().as[async.Plan] :: Nil)) run()
   }
 }
