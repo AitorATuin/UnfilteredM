@@ -47,9 +47,7 @@ trait MongoDBDAO extends DAO {
   val col: BSONCollection
 
   def insert[A](a: A)(implicit ev: BSONDocumentWriter[A]) =
-    col.insert(a: A) map (e => e.ok.
-      ?(e.errMsg.getOrElse("Unknow Error").left[A]).
-      |(a.right[String]))
+    col.insert(a: A)
 
   def findOne[A](query: (String, String)*)(implicit ev: BSONDocumentReader[A]) =
     col.find((BSONDocument() /: query.toList)(_ ++ _)).one[A]
