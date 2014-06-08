@@ -134,24 +134,33 @@ object GitHook {
 
   val validateUser = #>[AppTest, (String, String) => Boolean]((c: Config[AppTest]) =>
     ((user:String, pass:String) => {
-      if (user.some == c.opt[String]("blog.gihubUser") && pass.some == c.opt[String]("blog.gitPass")) true
+      if (user.some == c.opt[String]("blog.gitHookUser") && pass.some == c.opt[String]("blog.gitHookPass")) true
       else false
     }).right[String])
 
   import unfiltered.kit._
-
+  import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
   object Auth {
     def defaultFail(realm: String) = Unauthorized ~> WWWAuthenticate("""Basic realm="%s"""" format realm)
     def basic[A,B](is: (String, String) => Boolean, realm: String = "secret")(
-      intent: unfiltered.Async.Intent[A,B], onFail: ResponseFunction[B] = defaultFail(realm)) = {
-      intent.fold(
+      intent: unfiltered.Async.Intent[HttpServletRequest,HttpServletResponse],
+      onFail: ResponseFunction[HttpServletResponse] = defaultFail(realm)): unfiltered.Async.Intent[HttpServletRequest, HttpServletResponse] = {
+        case req@BasicAuth(u, p) if (is(u, p)) => intent(req)
+        case req@_ => req.respond(onFail)
+     }
+
+
+    /*  asynPlan.Intent {intent match {
+        case BasicAuth(u,p) if (is(u,p)) =>
+        case _ => onFail
+      }
         { _ => Pass },
         {
           case (BasicAuth(u, p), rf) => if(is(u,p)) rf else onFail
           case _ => onFail
         }
       )
-    }
+    }*/
   }
 
   def apply[A]()(implicit ev: Config[AppTest] => ErrorM[MongoDBDAO @@ A]) = for {
@@ -159,7 +168,8 @@ object GitHook {
     mongo <- config.resolvM[AppTest,MongoDBDAO, A]
     hook <- gitHook[A].run(mongo).toOption.get // It's safe, it's always right
     validate <- validateUser
-  } yield hook
+  } yield Auth.basic(validate)(hook)
+  //yield Auth.basic((user:String, pass:String) => true)(hook)
 }
 
 trait AppTest
@@ -184,8 +194,6 @@ object InTest {
 object Application  {
   import InProduction._
   def main(args: Array[String]) {
-    import unfiltered._
-    import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
-    UnfilteredApp[AppTest]() ~> ("/" -> (GitHook[PostEntry]().as[async.Plan] :: Nil)) run()
+     UnfilteredApp[AppTest]() ~> ("/" -> (GitHook[PostEntry]().as[async.Plan] :: Nil)) run()
   }
 }
