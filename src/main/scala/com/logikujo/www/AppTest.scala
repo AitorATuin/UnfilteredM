@@ -9,6 +9,7 @@ import model.blog.PostEntry
 import model.blog.PostEntry.Implicits._
 import reactivemongo.api.collections.default.BSONCollection
 import reactivemongo.core.commands.LastError
+import reactivemongo.api.indexes.{Index,IndexType}
 
 //import data.blog._
 import AsyncDirective._
@@ -158,7 +159,9 @@ object InProduction {
   }
   implicit val config = Configuration[AppTest]("com.logikujo.apptest")
   implicit val postDAO = (c:Config[AppTest]) => (getCol(c) match {
-    case (con, col, db) => MongoDBDAO[PostEntry](con)(col)(db)
+    case (con, col, db) =>
+      MongoDBDAO[PostEntry](con)(col)(db).
+        withIndex[PostEntry](Index(key = Seq("id" -> IndexType.Ascending), unique = true))
   }).right[String]
 }
 
@@ -171,7 +174,7 @@ object Application  {
   def main(args: Array[String]) {
      UnfilteredApp[AppTest]() ~>
        ("/" -> (
-                BlogPlan[AppTest, PostEntry].as[async.Plan] ::
+                //BlogPlan[AppTest, PostEntry].as[async.Plan] ::
                 RootPlan[AppTest] ::
                 NotFoundPlan[AppTest] ::
                 Nil)) ~>

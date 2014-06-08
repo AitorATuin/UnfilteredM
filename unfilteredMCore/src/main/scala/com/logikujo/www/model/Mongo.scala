@@ -5,15 +5,10 @@ import reactivemongo.api.indexes.{Index, IndexType}
 import reactivemongo.bson._
 import reactivemongo.api._
 import reactivemongo.api.collections.default.BSONCollection
-import scala.util.Try
-import com.typesafe.config.Config
-import com.github.kxbmap.configs._
 import scala.concurrent.ExecutionContext.Implicits.global
-import scalaz._
-import Scalaz._
+import scala.util.{Success, Failure}
 import org.slf4j.LoggerFactory
-import scala.concurrent.Future
-import reactivemongo.core.commands.LastError
+
 
 /**
  *
@@ -24,6 +19,8 @@ import reactivemongo.core.commands.LastError
  */
 
 trait MongoDBDAO extends DAO {
+  val logger = LoggerFactory.getLogger(classOf[MongoDBDAO])
+
   val col: BSONCollection
 
   def insert[A](a: A)(implicit ev: BSONDocumentWriter[A]) =
@@ -31,6 +28,18 @@ trait MongoDBDAO extends DAO {
 
   def findOne[A](query: (String, String)*)(implicit ev: BSONDocumentReader[A]) =
     col.find((BSONDocument() /: query.toList)(_ ++ _)).one[A]
+
+  def withIndex[Tag](index: Index) = {
+    val indexesString = index.key.map(_._1).mkString(":")
+    col.indexesManager.ensure(index).onComplete {
+      case Success(b) =>
+        if (b) logger.debug("Created indexes: " + indexesString)
+        else logger.error(s"Index yet created: ${col.indexesManager.collectionName} -- ${indexesString}")
+      case Failure(t) =>
+        logger.error(s"Couldnt create index: " + indexesString + ". Reason: " + t.toString)
+    }
+    this.withTag[Tag]
+  }
 }
 
 object MongoDBDAO {
