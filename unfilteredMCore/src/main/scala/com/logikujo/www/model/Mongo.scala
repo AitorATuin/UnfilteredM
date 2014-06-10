@@ -16,6 +16,8 @@ import org.slf4j.LoggerFactory
  *
  * com.logikujo.www.model 29/05/14 :: 20:19 :: eof
  *
+ * TODO: Add debug and error messages
+ *
  */
 
 trait MongoDBDAO extends DAO {
