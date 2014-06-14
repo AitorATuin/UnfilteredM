@@ -134,6 +134,7 @@ package object mail {
         }
       }
 
+    // TODO: Try -> \/ and flatten then
     def send(m: Mail) = sendEmail.map(_(m).
       fold(Try[String](throw new Exception("Email service is not configured.")))((m:Email) => Try[String](m.send())))
   }
