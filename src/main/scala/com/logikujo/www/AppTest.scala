@@ -7,6 +7,8 @@ import plans.blog._
 import model._
 import model.blog.PostEntry
 import model.blog.PostEntry.Implicits._
+import mail._
+
 import reactivemongo.api.collections.default.BSONCollection
 import reactivemongo.core.commands.LastError
 import reactivemongo.api.indexes.{Index,IndexType}
@@ -163,6 +165,14 @@ object InProduction {
       MongoDBDAO[PostEntry](con)(col)(db).
         withIndex[PostEntry](Index(key = Seq("id" -> IndexType.Ascending), unique = true))
   }).right[String]
+  implicit val mailContact = (c:Config[AppTest]) => (for {
+    to <- c.opt[String]("contact.contactAddress")
+    cc <- c.opt[List[String]]("contact.contactCC")
+    bcc <- c.opt[List[String]]("contact.contactBCC")
+  } yield Mail().to(to).cc(cc).bcc(bcc)).\/>("Mail contact not configured.")
+  implicit val mailSystem: AppTest ?> (MailSender @@ AppTest) =
+    (c:Config[AppTest]) =>
+      c.atPath[AppTest]("myMailSystem") map (MailSender[AppTest](_))
 }
 
 object InTest {
