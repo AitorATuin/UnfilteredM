@@ -9,11 +9,12 @@ import unfiltered.filter._
 import unfiltered.directives.{Result, Directive}
 import unfiltered.response.ResponseFunction
 import unfiltered.request.HttpRequest
-import com.typesafe.config.{ConfigFactory, Config}
+import com.typesafe.config.{ConfigException, ConfigFactory, Config => CConfig}
 import scalaz._
 import Scalaz._
 import javax.servlet.{ServletResponse, ServletRequest}
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
+import scala.util.{Try, Success => TSuccess, Failure => TFailure}
 
 /**
  *
@@ -32,12 +33,16 @@ package object www {
 
   // Confuration trait
   trait Configuration {
-    val config: com.typesafe.config.Config
+    val config: CConfig
     def get[T: AtPath](path: String): T = config.get[T](path)
     def opt[T: AtPath](path: String): Option[T] = config.opt[T](path)
+    def disjunction[T: AtPath](path: String): \/[String, T] =
+      config.opt[T](path).\/>(s"Not found config value: ${path}")
+    def ∨[T: AtPath](path: String) = disjunction[T](path)
+    def atPath[Tag](path: String) = Try(config.atPath(path)).
+      toOption.\/>(s"Not found config path: ${path}").
+      map(Configuration[Tag](_))
     def resolv[A,T](implicit ev: A @@ T) = ev
-    def resolvMV[Tag, A, T](implicit ev: A @@ T) = #>[Tag, A @@ T](ev)
-    def resolvMF[Tag, A, T](implicit ev: Config[Tag] => ErrorM[A @@ T]) = #>[Tag, A @@ T](ev)
     def resolvM[Tag, A, T](implicit ev:Config[Tag] => ErrorM[A @@ T]) = #>(ev)
   }
 
@@ -58,6 +63,9 @@ package object www {
     def apply[Tag](path: String) = new Configuration {
       val config = ConfigFactory.load.getConfig(path)
     }.withTag[Tag]
+    def apply[Tag](c: CConfig) = new Configuration {
+      val config = c
+    }.withTag[Tag]
     def apply[Tag]() = new Configuration {
       val config = ConfigFactory.empty()
     }.withTag[Tag]
@@ -67,6 +75,8 @@ package object www {
   // Reader Monad with Tagged Configuration
   type #>[Tag, R] = Kleisli[ErrorM, Config[Tag], R]
   type ##>[C, Tag, R] = Kleisli[ErrorM, C @@ Tag, R]
+  type ?>[Tag, R] = (Configuration @@ Tag) => ErrorM[R]
+  type ??>[C, Tag, R] = (C @@ Tag) => ErrorM[R]
 
   // alias for \/ monad with String in the left.
   type ErrorM[+A] = String \/ A
@@ -91,7 +101,6 @@ package object www {
   // Just returns the configuration, ask function inside Reader Monad
   def _configM = Kleisli.ask[ErrorM, Configuration]
   def configM[Tag] = Kleisli.ask[ErrorM, Config[Tag]]
-
 
   def unfilteredM = liftM[Server]_
   def unfilteredPlanM = liftM[UnfilteredPlan]_
