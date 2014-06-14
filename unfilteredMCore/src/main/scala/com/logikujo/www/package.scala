@@ -43,6 +43,7 @@ package object www {
       toOption.\/>(s"Not found config path: ${path}").
       map(Configuration[Tag](_))
     def resolv[A,T](implicit ev: A @@ T) = ev
+    def resolvFM[Tag, A, B, T](implicit ev:Config[Tag] => ErrorM[A => (B @@ T)]) = #>(ev)
     def resolvM[Tag, A, T](implicit ev:Config[Tag] => ErrorM[A @@ T]) = #>(ev)
   }
 
@@ -77,6 +78,7 @@ package object www {
   type ##>[C, Tag, R] = Kleisli[ErrorM, C @@ Tag, R]
   type ?>[Tag, R] = (Configuration @@ Tag) => ErrorM[R]
   type ??>[C, Tag, R] = (C @@ Tag) => ErrorM[R]
+  //type ??>[Tag, A, B, R] = (Configuration @@ Tag) => (A => (B @@ R))
 
   // alias for \/ monad with String in the left.
   type ErrorM[+A] = String \/ A
