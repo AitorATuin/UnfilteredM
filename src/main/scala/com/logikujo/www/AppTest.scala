@@ -159,17 +159,32 @@ object InProduction {
     val dbName = config.opt[String]("blog.mongo.database").getOrElse("logikujoDB")
     (connName, dbName, collName)
   }
+
+  // Main config.
   implicit val config = Configuration[AppTest]("com.logikujo.apptest")
+
+  // DAO for post entries
   implicit val postDAO = (c:Config[AppTest]) => (getCol(c) match {
     case (con, col, db) =>
       MongoDBDAO[PostEntry](con)(col)(db).
         withIndex[PostEntry](Index(key = Seq("id" -> IndexType.Ascending), unique = true))
   }).right[String]
+
+  // Mail to send notifications after blog updates
+  implicit val mailBlogNotification = (c:Config[AppTest]) => (for {
+    to <- c.opt[String]("blog.mail.notification")
+    cc <- c.opt[List[String]]("blog.mail.notificationCC")
+    bcc <- c.opt[List[String]]("blog.mail.notificationBCC")
+  } yield Mail().to(to).cc(cc).bcc(bcc)).\/>("Mail blog notification not configured")
+
+  // Mail to send notifications about contact requests
   implicit val mailContact = (c:Config[AppTest]) => (for {
     to <- c.opt[String]("contact.contactAddress")
     cc <- c.opt[List[String]]("contact.contactCC")
     bcc <- c.opt[List[String]]("contact.contactBCC")
   } yield Mail().to(to).cc(cc).bcc(bcc)).\/>("Mail contact not configured.")
+
+  // Mail subsystem used
   implicit val mailSystem: AppTest ?> (MailSender @@ AppTest) =
     (c:Config[AppTest]) =>
       c.atPath[AppTest]("myMailSystem") map (MailSender[AppTest](_))
