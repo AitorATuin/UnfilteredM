@@ -151,6 +151,7 @@ object GitHook {
 }
 
 trait AppTest
+trait Contact
 
 object InProduction {
   def getCol(config: Config[AppTest]) = {
@@ -178,11 +179,11 @@ object InProduction {
   } yield Mail().to(to).cc(cc).bcc(bcc)).\/>("Mail blog notification not configured")
 
   // Mail to send notifications about contact requests
-  implicit val mailContact = (c:Config[AppTest]) => (for {
+  implicit val mailContact: AppTest ?> (Mail @@ Contact) = (c:Config[AppTest]) => (for {
     to <- c.opt[String]("contact.contactAddress")
     cc <- c.opt[List[String]]("contact.contactCC")
     bcc <- c.opt[List[String]]("contact.contactBCC")
-  } yield Mail().to(to).cc(cc).bcc(bcc)).\/>("Mail contact not configured.")
+  } yield Mail().to(to).cc(cc).bcc(bcc).withTag[Contact]).\/>("Mail contact not configured.")
 
   // Mail subsystem used
   implicit val mailSystem: AppTest ?> (MailSender @@ AppTest) =
@@ -199,7 +200,7 @@ object Application  {
   def main(args: Array[String]) {
      UnfilteredApp[AppTest]() ~>
        ("/" -> (
-                //BlogPlan[AppTest, PostEntry].as[async.Plan] ::
+                BlogPlan[AppTest, PostEntry].as[async.Plan] ::
                 RootPlan[AppTest] ::
                 NotFoundPlan[AppTest] ::
                 Nil)) ~>

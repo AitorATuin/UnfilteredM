@@ -75,20 +75,23 @@ object BlogPlan extends BlogIntents {
           _ <- GET
           request <- Directives.request[Any]
           postEntry <- success(dao.findOne[Post]("id" -> title.toLowerCase))
-        } yield AsyncResponse(postEntry) {
-          case SSuccess(post) =>
-            logger.debug("Aqui estamos")
-            // Todo: renderString to response should be done in scalate with a function
-            post.
-              ?(scalate.renderString(request, "blogPost.scaml", "post" -> post.get.toString) match {
+        } yield {
+          logger.debug("KKKKKKKK")
+          AsyncResponse(postEntry) {
+            case SSuccess(post) =>
+              logger.debug("Aqui estamos")
+              // Todo: renderString to response should be done in scalate with a function
+              post.
+                ?(scalate.renderString(request, "blogPost.scaml", "post" -> post.get.toString) match {
                 case SSuccess(page) => Ok ~> ResponseString(page)
                 case SFailure(t) => InternalServerError ~> ResponseString("Not Implemented")
               }).
-              | {
+                | {
                 logger.debug("No hay postss!")
                 NotFound ~> Redirect("/blog/404")
-               }
-          case SFailure(t) => InternalServerError ~> ResponseString("Not Implemented")
+              }
+            case SFailure(t) => InternalServerError ~> ResponseString("Not Implemented")
+          }
         }
     }
 }
