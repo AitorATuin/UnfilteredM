@@ -76,7 +76,9 @@ package object mail {
 
   sealed trait MailSender {
     val config: Configuration
-    val sendEmail: \/[String, (Mail => Option[Email])] = for {
+    // Needs to be lazy to avoid null exception!
+    // TODO: Allow to compute sendEmail before calling send
+    lazy val sendEmail: \/[String, (Mail => Option[Email])] = for {
       localhost <- config.∨[String]("mail.localhost")
       smtp <- config.∨[String]("mail.smtpServer")
       port <- config.∨[Int]("mail.smtpPort")
@@ -106,6 +108,7 @@ package object mail {
           commonsMail.setHostName(smtp)
           commonsMail.setSmtpPort(port)
           commonsMail.setAuthenticator(new DefaultAuthenticator(user, passwd))
+          commonsMail.getMailSession.getProperties.setProperty("mail.smtp.localhost", localhost)
           def file2Attachment(f: java.io.File) = {
             val attachment = new EmailAttachment()
             attachment.setPath(f.getAbsolutePath)
@@ -138,7 +141,10 @@ package object mail {
     def send(m: Mail) = sendEmail.flatMap(f => f(m).
       \/>("Unable to send Mail, bad formed")).
       fold(
-        e => Try[String](throw new Exception(e)),
+        e => {
+
+          Try[String](throw new Exception(e))
+        },
         m => Try[String](m.send)
       )
       //fold(Try[String](throw new Exception("Email service is not configured.")))((m:Email) => Try[String](m.send())))
