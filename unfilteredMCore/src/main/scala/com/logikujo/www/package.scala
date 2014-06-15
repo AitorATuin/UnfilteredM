@@ -56,6 +56,7 @@ package object www {
     val v:A = a
   }
 
+  // TODO: apply can throw exception if path is not found.
   object Configuration {
     //def withTag[Tag](c:Configuration): Configuration @@ Tag = c.asInstanceOf[Configuration @@ Tag]
     /*def apply[Tag](path: String) = new Configuration {
