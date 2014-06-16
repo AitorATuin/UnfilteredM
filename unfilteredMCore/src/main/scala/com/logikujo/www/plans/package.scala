@@ -3,11 +3,13 @@ package com.logikujo.www
 import Implicits._
 import scalate._
 
-import unfiltered.filter.Plan
+import unfiltered.filter.async._
 import unfiltered.directives._
 import Directives._
 import unfiltered.response._
 import unfiltered.filter.request._
+import scalaz._
+import Scalaz._
 /**
  *
  * aitoriturri / LogiDev - [Fun Functional] / Logikujo.com
@@ -16,21 +18,22 @@ import unfiltered.filter.request._
  *
  */
 package object plans {
-  def RootPlan[Tag]: Tag #> Plan =  {
-    val a = for {
+  def RootPlan[Tag]: Tag #> Plan.Intent =
+    for {
       scalate <- scalateM[Tag]
-    } yield Directive.Intent[Any,Any] {
-      case ContextPath(ctx, "/") => success(Redirect("index"))
-      case ContextPath(ctx, "/index.html") => success(Redirect("index"))
-      case ContextPath(ctx, "/index") => scalate("index.scaml")
+    } yield Intent {
+      case req@ContextPath(ctx, "/") =>
+        req.respond(Redirect("index"))
+      case req@ContextPath(ctx, "/index.html") =>
+        req.respond(Redirect("index"))
+      case req@ContextPath(ctx, "/index") =>
+        req.respond(scalate.renderString(req,"index.scaml").toOption.some(Ok ~> ResponseString(_)).none(InternalServerError))
     }
-    a.as[Plan]
-  }
 
-  def NotFoundPlan[Tag]: Tag #> Plan = (for {
+  def NotFoundPlan[Tag]: Tag #> Plan.Intent = for {
     scalate <- scalateM[Tag]
-  } yield Directive.Intent[Any, Any] {
-      case ContextPath(ctx, path) =>
-        scalate.render("404.scaml").map(NotFound ~> ResponseString(_))
-    }).as[Plan]
+  } yield Intent {
+      case req@ContextPath(ctx, path) =>
+        req.respond(scalate.renderString(req,"404.scaml").toOption.some(Ok ~> ResponseString(_)).none(InternalServerError))
+    }
 }
