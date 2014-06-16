@@ -173,12 +173,12 @@ package object www {
 
   trait ServerMOps[App] {
     val value: App #> Server
-    def ~>(mPlans: (String, List[App #> InittedFilter])): App #> Server = {
-      val (ctx, plans) = mPlans
+    def ~>(mPlans: (String, List[App #> async.Plan.Intent])): App #> Server = {
+      val (ctx, intents) = mPlans
       for {
         server <- value
-        planList <- plans.sequenceU // Why sequenceU???
-      } yield server.context(ctx)((planList.foldLeft(_: ContextBuilder)(_ filter _)).andThen(_ => Unit))
+        intentsList <- intents.sequenceU
+      } yield server.context(ctx){_.filter(async.Planify(intentsList.reduce(_ orElse _))) } // TODO: Try to use as[sync.Plan]
     }
     def run()(implicit c: Config[App]) = value map (_.run()) run c
   }
