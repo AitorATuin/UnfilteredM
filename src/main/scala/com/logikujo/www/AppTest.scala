@@ -195,15 +195,94 @@ object InTest {
   //implicit val config = Configuration[AppTest]("com.logikujo.apptest.test")
 }
 
+object BlogPlan2 {
+  type %>[App, A] = Config[App] => ErrorM[A]
+  import reactivemongo.bson.BSONDocumentReader
+  import scalate._
+  import scala.util.{Success => SSuccess, Failure => SFailure}
+  def apply[App, Post : BSONDocumentReader](implicit ev: App %> @@[MongoDBDAO, Post]) =
+    for {
+      config <- configM[App]
+      dao <- config.resolvM[App, MongoDBDAO, Post]
+      scalate <- scalateM[App]
+    } yield AsyncDirective[Any, Option[Post]] {
+        case ContextPath(ctx, Seg("post" :: title :: Nil)) => for {
+          _ <- GET
+          request <- Directives.request[Any]
+          postEntry <- success(dao.findOne[Post]("id" -> title.toLowerCase))
+        } yield {
+          AsyncResponse(postEntry) {
+            case SSuccess(post) =>
+              // Todo: renderString to response should be done in scalate with a function
+              post.
+                ?(scalate.renderString(request, "blogPost.scaml", "post" -> post.get.toString) match {
+                case SSuccess(page) => Ok ~> ResponseString(page)
+                case SFailure(t) => InternalServerError ~> ResponseString("Not Implemented")
+              }).
+                | {
+                NotFound ~> Redirect("/blog/404")
+              }
+            case SFailure(t) => InternalServerError ~> ResponseString("Not Implemented")
+          }
+        }
+    }
+}
+
 object Application  {
   import InProduction._
+  object AsyncPlan3 {
+    def intent = unfiltered.filter.async.Intent {
+      case ContextPath(ctx, Seg("uno" :: Nil)) => Pass
+      case req@ContextPath(ctx, Seg("async" :: Nil)) =>
+        req.respond(ResponseString("test") ~> Ok)
+      case req@ContextPath(ctx, Seg("async1" :: Nil)) =>
+        //"respond" is usually called from an asynchronous callback handler
+        req.respond(ResponseString("test1") ~> Ok)
+
+        //"respond" is usually called from an asy
+    }
+    def intentM[T] = for {
+      config <- configM[T]
+    } yield intent
+  }
+  object AsyncPlan4   {
+    def intent = unfiltered.filter.async.Intent{
+      case ContextPath(ctx,Seg("pass2" :: Nil)) => Pass
+      case req@ContextPath(ctx, Seg("async2" :: Nil)) =>
+        //"respond" is usually called from an asynchronous callback handler
+        req.respond(ResponseString("test2") ~> Ok)
+    }
+    def intentM[T] = for {
+      config <- configM[T]
+    } yield intent
+  }
+
+  import scalate._
+  def NotFoundPlan2[Tag] = for {
+    scalate <- scalateM[Tag]
+  } yield unfiltered.filter.async.Intent {
+      case req@ContextPath(ctx, path) =>
+        req.respond(scalate.renderString(req,"404.scaml").toOption.some(Ok ~> ResponseString(_)).none(InternalServerError))
+    }
+  /*def main(args: Array[String]) {
+    println("STARTING")
+    unfiltered.jetty.Http.local(8080).
+      filter(unfiltered.filter.async.Planify(AsyncPlan3.intent orElse AsyncPlan4.intent)).run()
+    //unfiltered.netty.Http.local(8080).plan(hello).run()
+  }*/
   def main(args: Array[String]) {
-     UnfilteredApp[AppTest]() ~>
-       ("/" -> (
-                BlogPlan[AppTest, PostEntry].as[async.Plan] ::
-                RootPlan[AppTest] ::
-                NotFoundPlan[AppTest] ::
-                Nil)) ~>
-       ("/hook" -> (GitHook[PostEntry]().as[async.Plan] :: Nil)) run()
+    //val t1 = AsyncPlan3.intentM[AppTest]
+    //val t2 = AsyncPlan4.intentM[AppTest]
+    //val o = (t1 |@| t2 |@| RootPlan[AppTest] |@| BlogPlan2[AppTest, PostEntry] |@| NotFoundPlan[AppTest]) {_ orElse _ orElse _ orElse _ orElse _}
+    //println(o)
+    UnfilteredApp[AppTest]() ~>
+      ("/" -> (
+        AsyncPlan3.intentM[AppTest] ::
+          AsyncPlan4.intentM[AppTest] ::
+          RootPlan[AppTest] ::
+          BlogPlan2[AppTest, PostEntry] ::
+          NotFoundPlan[AppTest] ::
+          Nil)) run()
+       //("/hook" -> (GitHook[PostEntry]().as[async.Plan] :: Nil)) run()
   }
 }
