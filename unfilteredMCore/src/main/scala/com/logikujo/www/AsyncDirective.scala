@@ -10,6 +10,7 @@ import scala.concurrent.Future
 import scala.util.Try
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import org.slf4j.LoggerFactory
 
 /**
  *
@@ -19,14 +20,16 @@ import scala.concurrent.ExecutionContext.Implicits.global
  *
  */
 object AsyncDirective {
-  type AsyncDirectiveResponse[A,B] = (HttpRequest[A] => Result[ResponseFunction[B], AsyncResponse[B]])
-    type AsyncRequest[A,B] = HttpRequest[A] with unfiltered.Async.Responder[B]
-    trait AsyncResponse[A] {
-      val future: Future[A]
-      val onComplete: Try[A] => ResponseFunction[A]
+  val logger = LoggerFactory.getLogger("Async")
 
-      def !(f: ResponseFunction[A] => Unit) = future.onComplete(onComplete.andThen(f))
-    }
+  type AsyncDirectiveResponse[A,B] = (HttpRequest[A] => Result[ResponseFunction[B], AsyncResponse[B]])
+  type AsyncRequest[A,B] = HttpRequest[A] with unfiltered.Async.Responder[B]
+  trait AsyncResponse[A] {
+    val future: Future[A]
+    val onComplete: Try[A] => ResponseFunction[A]
+
+    def !(f: ResponseFunction[A] => Unit) = future.onComplete(onComplete.andThen(f))
+  }
 
   object AsyncResponse {
     def apply[A](f: Future[A])(func: Try[A] => ResponseFunction[A])  = new AsyncResponse[A] {
@@ -36,10 +39,12 @@ object AsyncDirective {
   }
 
   def apply[A, B](intent: PartialFunction[HttpRequest[A], AsyncDirectiveResponse[A,B]]): async.Plan.Intent = {
-    case req: AsyncRequest[A,B] if intent.isDefinedAt(req) => intent(req)(req) match {
-      case Result.Success(asyncResponse) => asyncResponse ! (req.respond _)
-      case Result.Failure(response) => req.respond(response)
-      case Result.Error(response) => req.respond(response)
+    case req: AsyncRequest[A,B] if intent.isDefinedAt(req) => {
+      intent(req)(req) match {
+        case Result.Success(asyncResponse) => asyncResponse ! (req.respond _)
+        case Result.Failure(response) => req.respond(response)
+        case Result.Error(response) => req.respond(response)
+      }
     }
   }
 }
