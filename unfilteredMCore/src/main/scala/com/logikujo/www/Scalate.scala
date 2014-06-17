@@ -30,10 +30,18 @@ package object scalate {
   def scalateM2 = liftM[Scalate]((c:Configuration) => (new Scalate {
     val config = c
   }).right[String])
-  def scalateM[Tag]: Tag #> Scalate = #> { c => new Scalate {
+  def scalateM[App]: App #> Scalate = #> { c => new Scalate {
     val config = c
   }.right[String]
   }
+  def scalateM[App, Tag](path: String): App #> (Scalate @@ Tag) =
+    for {
+      config <- configM[App]
+      newConfig <- config.atPath(path)
+    } yield new Scalate {
+      val config = newConfig
+    }.withTag[Tag]
+}
 
   sealed trait Scalate extends Logging {
     val config: Configuration
