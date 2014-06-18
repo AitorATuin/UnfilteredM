@@ -35,11 +35,17 @@ sealed case class PostEntry(title: String, contents: String, publishDate: DateTi
 }
 
 trait Post[A] {
-  def contents(post:A): String
+  def contents(post: A): String
+  def title(post: A): String
+  def publishDate(post: A): String
 }
+
+
 trait PostOps[A] {
   val v: A
   def contents(implicit ev:Post[A]) = ev.contents(v)
+  def title(implicit ev:Post[A]) = ev.title(v)
+  def publishDate(implicit ev:Post[A]) = ev.publishDate(v)
 }
 
 object PostEntry {
@@ -168,6 +174,8 @@ object PostEntry {
 
     implicit object PostEntryAsPost extends Post[PostEntry] {
       def contents(post: PostEntry) = post.contents
+      def title(post: PostEntry) = post.title
+      def publishDate(post: PostEntry) = post.publishDate.toString
     }
 
     implicit def toPostOps[A:Post](a:A) = new PostOps[A] {
