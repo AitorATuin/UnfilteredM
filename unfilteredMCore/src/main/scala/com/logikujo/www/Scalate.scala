@@ -27,21 +27,23 @@ import Scalaz._
 
 package object scalate {
   type UnfilteredScalateM = UnfilteredM[Scalate]
-  def scalateM2 = liftM[Scalate]((c:Configuration) => (new Scalate {
+
+  def scalateM2 = liftM[Scalate]((c: Configuration) => (new Scalate {
     val config = c
   }).right[String])
+
   def scalateM[App]: App #> Scalate = #> { c => new Scalate {
     val config = c
   }.right[String]
   }
-  def scalateM[App, Tag](path: String): App #> (Scalate @@ Tag) =
+
+  /*def scalateM[App, Tag](path: String): App #> (Scalate @@ Tag) =
     for {
       config <- configM[App]
       newConfig <- config.atPath(path)
     } yield new Scalate {
       val config = newConfig
-    }.withTag[Tag]
-}
+    }.withTag[Tag]*/
 
   sealed trait Scalate extends Logging {
     val config: Configuration
@@ -81,20 +83,42 @@ package object scalate {
       Failure(t)
     }).map(_.toString)
 
+    implicit val responseOk:String => ResponseFunction[Any] = Ok ~> ResponseString(_)
     def renderString[A, B](request: HttpRequest[A],
+                           template: String,
+                           attributes: (String, Any)*)
+                          (implicit
+                           ok: String => ResponseFunction[Any] = responseOk,
+                           engine: TemplateEngine = defaultEngine,
+                           bindings: List[Binding] = Nil,
+                           additionalAttributes: Seq[(String, Any)] = Nil
+                            ) = {
+      val renderedString = for {
+        context <- Try {
+          contextBuilder(Path(request), engine)
+        }
+        page <- renderPage(engine, context, template, attributes)
+      } yield page
+      renderedString match {
+        case Success(page) => ok(page)
+        case Failure(t) if engine.isDevelopmentMode =>
+          val sw = new StringWriter();
+          t.printStackTrace(new PrintWriter(sw));
+          InternalServerError ~> ResponseString(sw.toString)
+        // TODO: Redirect to error page?
+        case Failure(t) => InternalServerError ~> ResponseString("E500 :: Internal Server Error")
+      }
+    }
+
+    /*def renderScalate[A, B](request: HttpRequest[A],
                             template: String,
                             attributes: (String, Any)*)
                            (implicit
                             engine: TemplateEngine = defaultEngine,
                             bindings: List[Binding] = Nil,
                             additionalAttributes: Seq[(String, Any)] = Nil
-                             ) = {
-      val renderedString = for {
-        context <- Try{contextBuilder(Path(request), engine)}
-        page <- renderPage(engine, context, template, attributes)
-      } yield page
-      renderedString
-      /*TriedDirective.successOrElse(renderedString, {
+                             ) =
+      TriedDirective.successOrElse(renderString(request, template, attributes: _*), {
         case e: Throwable if engine.isDevelopmentMode =>
           val str = new StringWriter
           e.printStackTrace(new PrintWriter(str))
@@ -102,38 +126,21 @@ package object scalate {
           InternalServerError ~> ResponseString(str.toString)
         case e: Throwable => InternalServerError ~> ResponseString("Not implemented!")
       })*/
-    }
-
-    def renderScalate[A, B](request: HttpRequest[A],
-                            template: String,
-                            attributes: (String, Any)*)
-                            (implicit
-                            engine: TemplateEngine = defaultEngine,
-                            bindings: List[Binding] = Nil,
-                            additionalAttributes: Seq[(String, Any)] = Nil
-                            ) =
-      TriedDirective.successOrElse(renderString(request, template, attributes:_*), {
-        case e: Throwable if engine.isDevelopmentMode =>
-          val str = new StringWriter
-          e.printStackTrace(new PrintWriter(str))
-          str.close()
-          InternalServerError ~> ResponseString(str.toString)
-        case e: Throwable => InternalServerError ~> ResponseString("Not implemented!")
-      })
 
     //def renderString(req:HttpRequest[Any], template: String, attributes: (String, Any)*) =
 
-    def render(path: String, attributes: (String, Any)*) = {
+    /*def render(path: String, attributes: (String, Any)*) = {
       for {
         _ <- GET
         r <- Directives.request[Any]
         page <- renderScalate(r, path, attributes: _*)
-      }  yield page
-    }
+      } yield page
+    }*/
 
-    def apply(path: String, attributes: (String, Any)*): Directive[Any, ResponseFunction[Any], ResponseFunction[Any]] =
-      render(path, attributes:_*).map(Ok ~> ResponseString(_))
-       /* _ <- GET
+    /*def apply(path: String, attributes: (String, Any)*): Directive[Any, ResponseFunction[Any], ResponseFunction[Any]] =
+      render(path, attributes: _*).map(Ok ~> ResponseString(_))*/
+
+    /* _ <- GET
         r <- Directives.request[Any]
         page <- renderScalate(r, path, attributes: _*)
       } yield Ok ~> ResponseString(page)*/
@@ -151,4 +158,5 @@ package object scalate {
       engine
     }
   }
+
 }
