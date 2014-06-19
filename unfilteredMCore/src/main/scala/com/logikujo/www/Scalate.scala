@@ -28,27 +28,14 @@ import Scalaz._
 package object scalate {
   type UnfilteredScalateM = UnfilteredM[Scalate]
 
-  def scalateM2 = liftM[Scalate]((c: Configuration) => (new Scalate {
-    val config = c
-  }).right[String])
-
   def scalateM[App]: App #> Scalate = #> { c => new Scalate {
     val config = c
   }.right[String]
   }
 
-  /*def scalateM[App, Tag](path: String): App #> (Scalate @@ Tag) =
-    for {
-      config <- configM[App]
-      newConfig <- config.atPath(path)
-    } yield new Scalate {
-      val config = newConfig
-    }.withTag[Tag]*/
-
-  sealed trait Scalate extends Logging {
+  abstract class ScalateRender {
     val config: Configuration
-    type ToRenderContext =
-    (String, JWriter, TemplateEngine) => Try[DefaultRenderContext]
+    type ToRenderContext = (String, JWriter, TemplateEngine) => Try[DefaultRenderContext]
     lazy val defaultDir: File = config.config.get[Option[String]]("scalate.prefix").fold(new File(""))(new File(_))
     lazy val defaultTemplatesDir = config.opt[List[String]]("scalate.templatesDir").fold(Seq(defaultDir))(_.map(new File(_)))
     lazy val defaultLayoutsDir = config.opt[String]("scalate.layoutsDir").fold(new File(defaultDir, "layouts/"))(new File(_))
@@ -60,11 +47,8 @@ package object scalate {
 
     //val runMode: String = (new SystemProperties).getOrElseUpdate("runMode","production")
     val withLayoutSupport: Boolean = true
-
     private def contextBuilder(path: String, engine: TemplateEngine) = (writer: JWriter) =>
       new DefaultRenderContext(path, engine, new PrintWriter(writer))
-
-    //private def renderPage(template: String) = ()
     private def renderPage(engine: TemplateEngine,
                            contextForWriter: JWriter => DefaultRenderContext,
                            template: String,
@@ -83,12 +67,10 @@ package object scalate {
       Failure(t)
     }).map(_.toString)
 
-    implicit val responseOk:String => ResponseFunction[Any] = Ok ~> ResponseString(_)
     def renderString[A, B](request: HttpRequest[A],
                            template: String,
                            attributes: (String, Any)*)
                           (implicit
-                           ok: String => ResponseFunction[Any] = responseOk,
                            engine: TemplateEngine = defaultEngine,
                            bindings: List[Binding] = Nil,
                            additionalAttributes: Seq[(String, Any)] = Nil
@@ -100,51 +82,15 @@ package object scalate {
         page <- renderPage(engine, context, template, attributes)
       } yield page
       renderedString match {
-        case Success(page) => ok(page)
+        case Success(page) => success(page)
         case Failure(t) if engine.isDevelopmentMode =>
-          val sw = new StringWriter();
-          t.printStackTrace(new PrintWriter(sw));
+          val sw = new StringWriter()
+          t.printStackTrace(new PrintWriter(sw))
           InternalServerError ~> ResponseString(sw.toString)
         // TODO: Redirect to error page?
-        case Failure(t) => InternalServerError ~> ResponseString("E500 :: Internal Server Error")
+        case Failure(t) => failure(t)
       }
     }
-
-    /*def renderScalate[A, B](request: HttpRequest[A],
-                            template: String,
-                            attributes: (String, Any)*)
-                           (implicit
-                            engine: TemplateEngine = defaultEngine,
-                            bindings: List[Binding] = Nil,
-                            additionalAttributes: Seq[(String, Any)] = Nil
-                             ) =
-      TriedDirective.successOrElse(renderString(request, template, attributes: _*), {
-        case e: Throwable if engine.isDevelopmentMode =>
-          val str = new StringWriter
-          e.printStackTrace(new PrintWriter(str))
-          str.close()
-          InternalServerError ~> ResponseString(str.toString)
-        case e: Throwable => InternalServerError ~> ResponseString("Not implemented!")
-      })*/
-
-    //def renderString(req:HttpRequest[Any], template: String, attributes: (String, Any)*) =
-
-    /*def render(path: String, attributes: (String, Any)*) = {
-      for {
-        _ <- GET
-        r <- Directives.request[Any]
-        page <- renderScalate(r, path, attributes: _*)
-      } yield page
-    }*/
-
-    /*def apply(path: String, attributes: (String, Any)*): Directive[Any, ResponseFunction[Any], ResponseFunction[Any]] =
-      render(path, attributes: _*).map(Ok ~> ResponseString(_))*/
-
-    /* _ <- GET
-        r <- Directives.request[Any]
-        page <- renderScalate(r, path, attributes: _*)
-      } yield Ok ~> ResponseString(page)*/
-
 
     lazy private val defaultEngine = {
       val engine = new TemplateEngine(defaultTemplatesDir, runMode)
@@ -158,5 +104,20 @@ package object scalate {
       engine
     }
   }
-
+  sealed trait Scalate extends ScalateRender {
+    val success: String => ResponseFunction[Any] =
+      Ok ~> ResponseString(_)
+    val failure: Throwable => ResponseFunction[Any] =
+      _ => InternalServerError ~> ResponseString("E500: InternalServerError")
+    def success(f: String => ResponseFunction[Any]) = new Scalate {
+      val config = this.config
+      override val success = f
+      override val failure = this.failure
+    }
+    def failure(f: Throwable => ResponseFunction[Any]) = new Scalate {
+      val config = this.config
+      override val success = this.success
+      override val failure = f
+    }
+  }
 }

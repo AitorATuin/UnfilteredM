@@ -82,9 +82,9 @@ object BlogPlan extends BlogIntents {
               // TODO: Use config to adapt the template
               post.
                 ?(scalate.renderString(request, "blog/index.scaml", "post" -> post)).
-                |(scalate.renderString(request, "/blog/404.scaml")((s:String) => NotFound ~> ResponseString(s)))
+                |(scalate.renderString(request, "/blog/404.scaml").failure((s:Throwable) => NotFound ~> ResponseString("E500 :: InternaServerError")))
             // TODO: Redirect to error page. development mode?
-            case SFailure(t) => InternalServerError ~> ResponseString("E500 :: Internal Server Error")
+            case SFailure(t) => InternalServerError ~> ResponseString("E500 :: InternalServerError")
           }
         }
     }
