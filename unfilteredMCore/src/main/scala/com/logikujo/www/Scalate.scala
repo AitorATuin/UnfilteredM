@@ -19,10 +19,7 @@ import scalaz._
 import Scalaz._
 
 /*
- *  TODO: Refactor this class completely
- *  Currently render supports only Directives and Try[String]
- *  Add support for ReponseFunction
- *
+ *  TODO: Support for several engines, now is hardcoded
  */
 
 package object scalate {
@@ -35,6 +32,8 @@ package object scalate {
 
   abstract class ScalateRender {
     val config: Configuration
+    val success: String => ResponseFunction[Any]
+    val failure: Throwable => ResponseFunction[Any]
     type ToRenderContext = (String, JWriter, TemplateEngine) => Try[DefaultRenderContext]
     lazy val defaultDir: File = config.config.get[Option[String]]("scalate.prefix").fold(new File(""))(new File(_))
     lazy val defaultTemplatesDir = config.opt[List[String]]("scalate.templatesDir").fold(Seq(defaultDir))(_.map(new File(_)))
@@ -60,34 +59,32 @@ package object scalate {
       engine.layout(template, context)
       out
     }.transform(_ => {
-      out.close();
+      out.close()
       Success(out)
     }, t => {
-      out.close();
+      out.close()
       Failure(t)
     }).map(_.toString)
 
-    def renderString[A, B](request: HttpRequest[A],
+    protected def renderString[A, B](request: HttpRequest[A],
                            template: String,
-                           attributes: (String, Any)*)
+                           attributes: Seq[(String, Any)])
                           (implicit
-                           engine: TemplateEngine = defaultEngine,
                            bindings: List[Binding] = Nil,
                            additionalAttributes: Seq[(String, Any)] = Nil
                             ) = {
       val renderedString = for {
         context <- Try {
-          contextBuilder(Path(request), engine)
+          contextBuilder(Path(request), defaultEngine)
         }
-        page <- renderPage(engine, context, template, attributes)
+        page <- renderPage(defaultEngine, context, template, attributes)
       } yield page
       renderedString match {
         case Success(page) => success(page)
-        case Failure(t) if engine.isDevelopmentMode =>
+        case Failure(t) if defaultEngine.isDevelopmentMode =>
           val sw = new StringWriter()
           t.printStackTrace(new PrintWriter(sw))
           InternalServerError ~> ResponseString(sw.toString)
-        // TODO: Redirect to error page?
         case Failure(t) => failure(t)
       }
     }
@@ -109,15 +106,23 @@ package object scalate {
       Ok ~> ResponseString(_)
     val failure: Throwable => ResponseFunction[Any] =
       _ => InternalServerError ~> ResponseString("E500: InternalServerError")
-    def success(f: String => ResponseFunction[Any]) = new Scalate {
-      val config = this.config
-      override val success = f
-      override val failure = this.failure
+    def withSuccess(f: String => ResponseFunction[Any]) = {
+      val _failure = this.failure
+      val _config = this.config
+      new Scalate {
+        val config: Configuration = _config
+        override val success = f
+        override val failure: Throwable => ResponseFunction[Any] = _failure
+      }
     }
-    def failure(f: Throwable => ResponseFunction[Any]) = new Scalate {
-      val config = this.config
-      override val success = this.success
+    def withFailure(f: Throwable => ResponseFunction[Any]) = new Scalate {
+      val config: Configuration = this.config
+      override val success: String => ResponseFunction[Any] = this.success
       override val failure = f
     }
+    def apply[A](request: HttpRequest[A], template: String, attributes: (String, Any)*) =
+      renderString(request, template, attributes)
+    def render[A](request: HttpRequest[A], template: String, attributes: (String,Any)*) =
+      apply(request, template, attributes:_*)
   }
 }

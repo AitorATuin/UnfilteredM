@@ -34,13 +34,13 @@ package object plans {
       case req@ContextPath(ctx, "/index.html") =>
         req.respond(Redirect("index"))
       case req@ContextPath(ctx, "/index") =>
-        req.respond(scalate.renderString(req,"index.scaml"))
+        req.respond(scalate(req,"index.scaml"))
     }
 
   def NotFoundPlan[Tag]: Tag #> Plan.Intent = for {
     scalate <- scalateM[Tag]
   } yield Intent {
       case req@ContextPath(ctx, path) =>
-        req.respond(scalate.renderString(req,"404.scaml"))
+        req.respond(scalate(req,"404.scaml"))
     }
 }
