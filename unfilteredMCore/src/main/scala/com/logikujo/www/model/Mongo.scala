@@ -25,11 +25,16 @@ trait MongoDBDAO extends DAO {
 
   val col: BSONCollection
 
+  def query[A](q: BSONDocument)(implicit ev: BSONDocumentReader[A]) = col.find(q)
+
   def insert[A](a: A)(implicit ev: BSONDocumentWriter[A]) =
     col.insert(a: A)
 
-  def findOne[A](query: (String, String)*)(implicit ev: BSONDocumentReader[A]) =
-    col.find((BSONDocument() /: query.toList)(_ ++ _)).one[A]
+  def findOne[A](q: BSONDocument)(implicit ev: BSONDocumentReader[A]) =
+    query[A](q).one[A]
+
+  def find[A](q: BSONDocument)(implicit ev: BSONDocumentReader[A]) =
+    query[A](q).cursor[A].collect[List]()
 
   def withIndex[Tag](index: Index) = {
     val indexesString = index.key.map(_._1).mkString(":")

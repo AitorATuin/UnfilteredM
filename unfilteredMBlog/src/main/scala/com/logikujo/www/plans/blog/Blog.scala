@@ -15,7 +15,7 @@ import unfiltered.directives.Directives._
 
 import scala.util.{Success => SSuccess, Failure => SFailure}
 
-import reactivemongo.bson.BSONDocumentReader
+import reactivemongo.bson.{BSONDocument, BSONDocumentReader}
 
 import argonaut._
 import Argonaut._
@@ -74,17 +74,10 @@ object BlogPlan extends BlogIntents {
         case ContextPath(ctx, Seg("post" :: title :: Nil)) => for {
           _ <- GET
           request <- Directives.request[Any]
-          postEntry <- success(dao.findOne[Post]("id" -> title.toLowerCase))
+          postEntry <- success(dao.findOne[Post](BSONDocument("id" -> title.toLowerCase)))
         } yield {
           AsyncResponse(postEntry) {
-            case SSuccess(post) =>
-              // TODO: Use config to adapt the template
-              post.
-                ?(scalate(request, "blog/index.scaml", "post" -> post)).
-                |(scalate.withSuccess { _ =>
-                  InternalServerError ~> ResponseString("error")
-                  } render (request, "blog/404.scaml")
-                )
+            case SSuccess(post) => scalate(request, "blog/index.scaml", "post" -> post)
             case SFailure(t) => InternalServerError ~> ResponseString("E500 :: InternalServerError")
           }
         }

@@ -112,13 +112,17 @@ package object scalate {
       new Scalate {
         val config: Configuration = _config
         override val success = f
-        override val failure: Throwable => ResponseFunction[Any] = _failure
+        override val failure = _failure
       }
     }
-    def withFailure(f: Throwable => ResponseFunction[Any]) = new Scalate {
-      val config: Configuration = this.config
-      override val success: String => ResponseFunction[Any] = this.success
-      override val failure = f
+    def withFailure(f: Throwable => ResponseFunction[Any]) = {
+      val _config = this.config
+      val _success = this.success
+      new Scalate {
+        val config: Configuration = _config
+        override val success = _success
+        override val failure = f
+      }
     }
     def apply[A](request: HttpRequest[A], template: String, attributes: (String, Any)*) =
       renderString(request, template, attributes)
