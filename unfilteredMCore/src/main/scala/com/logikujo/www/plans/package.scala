@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory
  *
  * TODO: Add support for disjunction in indexTpml
  * TODO: Add support for development flag in indelTmpl
+ * TODO: Refactor the sequence map orElse foreach in both plans
  *
  */
 package object plans {
