@@ -14,6 +14,7 @@ import unfiltered.directives._
 import unfiltered.directives.Directives._
 
 import scala.util.{Success => SSuccess, Failure => SFailure}
+import scala.concurrent.Future
 
 import reactivemongo.bson.{BSONDocument, BSONDocumentReader}
 
@@ -32,6 +33,16 @@ import org.slf4j.LoggerFactory
  * com.logikujo.www.plans 9/01/14 :: 20:31 :: eof
  *
  */
+
+trait BlogParameters {
+  def ff(title: String): Future[Map[String, Any]]
+  def apply(title: String) = ff(title)
+}
+object BlogParameters {
+  def apply[Tag](f:String => Future[Map[String, Any]]) = new BlogParameters {
+    def ff(title: String) = f(title)
+  }.withTag[Tag]
+}
 
 // TODO: Make PostEntry to be able to take data from any store
 protected trait BlogIntents {
@@ -62,24 +73,31 @@ protected trait BlogIntents {
         apply(c.opt[List[String]](cfgPath).getOrElse(defaultPath)).right[String])
   }*/
 }
+// TODO: add getOrElse for disjunctions and replace in config.opt with config.disjunction
+// TODO: add response in case of development mode if blogTmpl is not defined
 object BlogPlan extends BlogIntents {
-  type %>[App, A] = Config[App] => ErrorM[A]
-
-  def apply[App, Post : BSONDocumentReader](implicit ev: App %> @@[MongoDBDAO, Post]) =
+  def apply[App, Post: BSONDocumentReader](path: String = "/")
+  (implicit a: App ?> @@[MongoDBDAO, Post],
+            b: App ?> @@[BlogParameters, Post]) =
     for {
-      config <- configM[App]
+      config <- configM[App].flatMapK(_.atPath(path))
       dao <- config.resolvM[App, MongoDBDAO, Post]
       scalate <- scalateM[App]
-    } yield AsyncDirective[Any, Option[Post]] {
-        case ContextPath(ctx, Seg("post" :: title :: Nil)) => for {
-          _ <- GET
-          request <- Directives.request[Any]
-          postEntry <- success(dao.findOne[Post](BSONDocument("id" -> title.toLowerCase)))
-        } yield {
-          AsyncResponse(postEntry) {
-            case SSuccess(post) => scalate(request, "blog/index.scaml", "post" -> post)
-            case SFailure(t) => InternalServerError ~> ResponseString("E500 :: InternalServerError")
-          }
+      scalateParams <- config.resolvM[App, BlogParameters, Post]
+    } yield AsyncDirective[Any, Map[String, Any]] {
+      case ContextPath(ctx, Seg("post" :: title :: Nil)) => for {
+        _ <- GET
+        request <- Directives.request[Any]
+        blogTmpl <- getOrElse(config.opt[String]("blog.postTemplate"),
+          InternalServerError ~> ResponseString("blog.postTemplate"))
+        //postEntry <- success(dao.findOne[Post](BSONDocument("id" -> title.toLowerCase)))
+        params <- success(scalateParams(title))
+      } yield {
+        AsyncResponse(params) {
+          case SSuccess(post) =>
+            scalate(request, blogTmpl, post.toList:_*)
+          case SFailure(t) => InternalServerError ~> ResponseString("E500 :: InternalServerError")
         }
+      }
     }
 }

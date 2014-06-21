@@ -202,7 +202,7 @@ object Application  {
     UnfilteredApp[AppTest]() ~>
       ("/" -> (
           RootPlan[AppTest] ::
-          BlogPlan[AppTest, PostEntry] ::
+          //BlogPlan[AppTest, PostEntry] ::
           NotFoundPlan[AppTest] ::
           Nil)) ~>
        ("/hook" -> (GitHook[PostEntry]() :: Nil)) run()
