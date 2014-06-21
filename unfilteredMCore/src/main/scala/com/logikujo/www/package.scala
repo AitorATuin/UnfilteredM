@@ -1,26 +1,36 @@
 package com.logikujo
 
-//import com.logikujo.www.plans.{NotFoundPlan, RootPlan}
+
 import unfiltered.jetty.{ContextBuilder, Server, Http}
-import com.github.kxbmap.configs._
 import unfiltered.Cycle._
 import unfiltered.Async
 import unfiltered.filter._
 import unfiltered.directives.{Result, Directive}
 import unfiltered.response.ResponseFunction
 import unfiltered.request.HttpRequest
-import com.typesafe.config.{ConfigException, ConfigFactory, Config => CConfig}
+
 import scalaz._
 import Scalaz._
+
 import javax.servlet.{ServletResponse, ServletRequest}
 import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
+
 import scala.util.{Try, Success => TSuccess, Failure => TFailure}
+import scala.annotation.implicitNotFound
+
+import com.typesafe.config.{ConfigException, ConfigFactory, Config => CConfig}
+import com.github.kxbmap.configs._
+
+import org.slf4j.LoggerFactory
+import java.io.{PrintWriter, StringWriter}
 
 /**
  *
  * aitoriturri / LogiDev - [Fun Functional] / Logikujo.com
  *
  * com.logikujo.www 10/05/14 :: 17:38 :: eof
+ *
+ * // TODO: Add error msg to atPath
  *
  */
 package object www {
@@ -33,15 +43,33 @@ package object www {
 
   // Confuration trait
   trait Configuration {
+    val logger = LoggerFactory.getLogger(classOf[Configuration])
     val config: CConfig
     def get[T: AtPath](path: String): T = config.get[T](path)
     def opt[T: AtPath](path: String): Option[T] = config.opt[T](path)
     def disjunction[T: AtPath](path: String): \/[String, T] =
       config.opt[T](path).\/>(s"Not found config value: ${path}")
     def ∨[T: AtPath](path: String) = disjunction[T](path)
-    def atPath[Tag](path: String) = Try(config.atPath(path)).
-      toOption.\/>(s"Not found config path: ${path}").
-      map(Configuration[Tag](_))
+    def atPath[Tag](path: String): \/[String, Config[Tag]] =
+      if (path == "/") Configuration[Tag](config.root.toConfig).right[String]
+      else
+        (for {
+          hasPath <- Try((config.hasPath(path) == true).
+            ?(true).
+            |{throw new Exception(s"path ${path} doesnt exists.");false}) // Throw exception to know where is comming the original call
+        } yield hasPath) match {
+          case TSuccess(true) => {
+            Configuration[Tag](config.withOnlyPath(path)).right[String]
+          }
+          case TSuccess(false) => s"Not found config path: ${path}. Cause: Unknow".left
+          case TFailure(t) => {
+            val sw = new StringWriter()
+            val pw = new PrintWriter(sw)
+            t.printStackTrace(pw)
+            s"Not found config path: ${path}. Cause: ${sw.toString}".left
+          }
+        }
+
     def resolv[A,T](implicit ev: A @@ T) = ev
     def resolvFM[Tag, A, B, T](implicit ev:Config[Tag] => ErrorM[A => (B @@ T)]) = #>(ev)
     def resolvM[Tag, A, T](implicit ev:Config[Tag] => ErrorM[A @@ T]) = #>(ev)
@@ -58,10 +86,6 @@ package object www {
 
   // TODO: apply can throw exception if path is not found.
   object Configuration {
-    //def withTag[Tag](c:Configuration): Configuration @@ Tag = c.asInstanceOf[Configuration @@ Tag]
-    /*def apply[Tag](path: String) = new Configuration {
-      val config = ConfigFactory.load.getConfig(path)
-    }.asInstanceOf[Configuration @@ Tag]*/
     def apply[Tag](path: String) = new Configuration {
       val config = ConfigFactory.load.getConfig(path)
     }.withTag[Tag]
@@ -79,7 +103,6 @@ package object www {
   type ##>[C, Tag, R] = Kleisli[ErrorM, C @@ Tag, R]
   type ?>[Tag, R] = (Configuration @@ Tag) => ErrorM[R]
   type ??>[C, Tag, R] = (C @@ Tag) => ErrorM[R]
-  //type ??>[Tag, A, B, R] = (Configuration @@ Tag) => (A => (B @@ R))
 
   // alias for \/ monad with String in the left.
   type ErrorM[+A] = String \/ A
