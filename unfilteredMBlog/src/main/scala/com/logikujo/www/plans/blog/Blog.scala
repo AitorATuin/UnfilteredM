@@ -88,8 +88,8 @@ object BlogPlan extends BlogIntents {
       case ContextPath(ctx, Seg("post" :: title :: Nil)) => for {
         _ <- GET
         request <- Directives.request[Any]
-        blogTmpl <- getOrElse(config.opt[String]("blog.postTemplate"),
-          InternalServerError ~> ResponseString("blog.postTemplate"))
+        blogTmpl <- getOrElse(config.opt[String]("postTemplate"),
+          InternalServerError ~> ResponseString("postTemplate"))
         //postEntry <- success(dao.findOne[Post](BSONDocument("id" -> title.toLowerCase)))
         params <- success(scalateParams(title))
       } yield {
