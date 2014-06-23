@@ -28,29 +28,23 @@ package object plans {
   def RootPlan[App](path: String = "/"): App #> Plan.Intent =
     for {
       config <- configM[App].flatMapK(_.atPath(path))
+      indexTmpl <- config.∨[String]("indexTemplate").configured[App]
       scalate <- scalateM[App]
     } yield Intent {
       case req@ContextPath(ctx, "/") =>
         req.respond(Redirect("index"))
       case req@ContextPath(ctx, "/index.html") =>
         req.respond(Redirect("index"))
-      case req@ContextPath(ctx, "/index") => (for {
-          indexTmpl <- config.opt[String]("indexTemplate")
-        } yield indexTmpl).
-          map(scalate(req,_)).
-          orElse(Some(InternalServerError ~> ResponseString("indexTemplate"))).
-          foreach(req.respond(_))
+      case req@ContextPath(ctx, "/index") => req.respond(scalate(req, indexTmpl))
     }
 
   def NotFoundPlan[App](path: String = "/"): App #> Plan.Intent = for {
     config <- configM[App].flatMapK(_.atPath(path))
+    notFoundTmpl <- config.∨[String]("404Template").configured[App]
     scalate <- scalateM[App]
   } yield Intent {
-      case req@ContextPath(ctx, path) => (for {
-        notFoundTemplate <- config.opt[String]("404Template")
-      } yield notFoundTemplate).
-        map(scalate(req,_)).
-        orElse(Some(InternalServerError ~> ResponseString("404Template"))).
-        foreach(req.respond(_))
+      case req@ContextPath(ctx, path) =>
+        req.respond(scalate.
+          withSuccess(NotFound ~> ResponseString(_))(req, notFoundTmpl))
     }
 }
