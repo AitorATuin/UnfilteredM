@@ -34,13 +34,16 @@ import org.slf4j.LoggerFactory
  *
  */
 
+/*
+ * TODO: Make Generic?
+ */
 trait BlogParameters {
-  def ff(title: String): Future[Map[String, Any]]
-  def apply(title: String) = ff(title)
+  def run(title: String): Future[Map[String, Any]]
+  def apply(title: String) = run(title)
 }
 object BlogParameters {
   def apply[Tag](f:String => Future[Map[String, Any]]) = new BlogParameters {
-    def ff(title: String) = f(title)
+    def run(title: String) = f(title)
   }.withTag[Tag]
 }
 
@@ -73,29 +76,52 @@ protected trait BlogIntents {
         apply(c.opt[List[String]](cfgPath).getOrElse(defaultPath)).right[String])
   }*/
 }
+
 // TODO: add getOrElse for disjunctions and replace in config.opt with config.disjunction
 // TODO: add response in case of development mode if blogTmpl is not defined
 object BlogPlan extends BlogIntents {
-  def apply[App, Post: BSONDocumentReader](path: String = "/")
-  (implicit a: App ?> @@[MongoDBDAO, Post],
-            b: App ?> @@[BlogParameters, Post]) =
+  // TODO: Move import and type from here
+  import AsyncDirective._
+  type FutureResponse = PartialFunction[HttpRequest[Any], Result[ResponseFunction[Any], Future[Map[String, Any]]]]
+  /*
+   * Injects a FutureResponse (=>?[HttpRequest[Any], Result[ResponseFunction[Any], Future[Map[String, Any]]]])
+   * The FutureResponse gives the map of parameters to the scalate template
+   */
+  def withResponse[App, Post: BSONDocumentReader](path: String = "/")(implicit b: App ?> @@[FutureResponse, Post]) =
     for {
       config <- configM[App].flatMapK(_.atPath(path))
-      dao <- config.resolvM[App, MongoDBDAO, Post]
+      postTmpl <- config.∨[String]("postTemplate").configured[App]
       scalate <- scalateM[App]
+      blogResponse <- config.resolvM[App, FutureResponse, Post]
+    } yield AsyncDirective[Any, Map[String,Any]] {
+      case req: HttpRequest[Any] => blogResponse andThen {
+        for {
+          futureMap <- _
+        } yield AsyncResponse(futureMap) {
+          case SSuccess(post) => scalate(req, postTmpl, post.toList: _*)
+          case SFailure(t) => InternalServerError ~> ResponseString("E500 :: InternalServerError")
+        }
+      }
+    }
+
+  /*
+   * Injects BlogParameters
+   */
+  def apply[App, Post: BSONDocumentReader](path: String = "/")(implicit b: App ?> @@[BlogParameters, Post]) =
+    for {
+      config <- configM[App].flatMapK(_.atPath(path))
+      scalate <- scalateM[App]
+      postTmpl <- config.∨[String]("postTemplate").configured[App]
       scalateParams <- config.resolvM[App, BlogParameters, Post]
     } yield AsyncDirective[Any, Map[String, Any]] {
       case ContextPath(ctx, Seg("post" :: title :: Nil)) => for {
         _ <- GET
         request <- Directives.request[Any]
-        blogTmpl <- getOrElse(config.opt[String]("postTemplate"),
-          InternalServerError ~> ResponseString("postTemplate"))
-        //postEntry <- success(dao.findOne[Post](BSONDocument("id" -> title.toLowerCase)))
         params <- success(scalateParams(title))
       } yield {
         AsyncResponse(params) {
           case SSuccess(post) =>
-            scalate(request, blogTmpl, post.toList:_*)
+            scalate(request, postTmpl, post.toList:_*)
           case SFailure(t) => InternalServerError ~> ResponseString("E500 :: InternalServerError")
         }
       }
