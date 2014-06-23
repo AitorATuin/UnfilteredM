@@ -47,8 +47,7 @@ package object www {
     val config: CConfig
     def get[T: AtPath](path: String): T = config.get[T](path)
     def opt[T: AtPath](path: String): Option[T] = config.opt[T](path)
-    def disjunction[T: AtPath](path: String): \/[String, T] =
-      config.opt[T](path).\/>(s"Not found config value: ${path}")
+    def disjunction[T: AtPath](path: String): \/[String, T] = config.opt[T](path).\/>(s"Not found config value: ${path}")
     def ∨[T: AtPath](path: String) = disjunction[T](path)
     def atPath[Tag](path: String): \/[String, Config[Tag]] =
       if (path == "/") Configuration[Tag](config.root.toConfig).right[String]
@@ -59,7 +58,7 @@ package object www {
             |{throw new Exception(s"path ${path} doesnt exists.");false}) // Throw exception to know where is comming the original call
         } yield hasPath) match {
           case TSuccess(true) => {
-            Configuration[Tag](config.withOnlyPath(path)).right[String]
+            Configuration[Tag](config.getConfig(path)).right[String]
           }
           case TSuccess(false) => s"Not found config path: ${path}. Cause: Unknow".left
           case TFailure(t) => {
@@ -210,4 +209,8 @@ package object www {
     new ServerMOps[App] {
       val value = v
     }
+
+  implicit class Configured[T](v: ErrorM[T]) {
+    def configured[App]: App #> T = #>((c:Config[App]) => v)
+  }
 }
