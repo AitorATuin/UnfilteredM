@@ -25,6 +25,7 @@ import scalaz._
 import Scalaz._
 
 import org.slf4j.LoggerFactory
+import javax.servlet.http.HttpServletRequest
 
 /**
  *
@@ -80,28 +81,26 @@ protected trait BlogIntents {
 // TODO: add getOrElse for disjunctions and replace in config.opt with config.disjunction
 // TODO: add response in case of development mode if blogTmpl is not defined
 object BlogPlan extends BlogIntents {
-  // TODO: Move import and type from here
-  import AsyncDirective._
-  type FutureResponse = PartialFunction[HttpRequest[Any], Result[ResponseFunction[Any], Future[Map[String, Any]]]]
   /*
    * Injects a FutureResponse (=>?[HttpRequest[Any], Result[ResponseFunction[Any], Future[Map[String, Any]]]])
    * The FutureResponse gives the map of parameters to the scalate template
    */
-  def withResponse[App, Post: BSONDocumentReader](path: String = "/")(implicit b: App ?> @@[FutureResponse, Post]) =
+  def withResponse[App, Post: BSONDocumentReader](path: String = "/")(implicit b: App ?> @@[=>??, Post]) =
     for {
       config <- configM[App].flatMapK(_.atPath(path))
       postTmpl <- config.∨[String]("postTemplate").configured[App]
       scalate <- scalateM[App]
-      blogResponse <- config.resolvM[App, FutureResponse, Post]
-    } yield AsyncDirective[Any, Map[String,Any]] {
-      case req: HttpRequest[Any] => blogResponse andThen {
-        for {
-          futureMap <- _
-        } yield AsyncResponse(futureMap) {
-          case SSuccess(post) => scalate(req, postTmpl, post.toList: _*)
-          case SFailure(t) => InternalServerError ~> ResponseString("E500 :: InternalServerError")
+      blogResponse <- config.resolvM[App, =>??, Post]
+    } yield AsyncDirective[HttpServletRequest, (String,Map[String, Any])] {
+      case req if blogResponse.isDefinedAt(req) => for {
+        futureMap <- blogResponse(req)
+      } yield AsyncResponse(futureMap) {
+          case SSuccess((tmpl, post)) => scalate(req, tmpl, post.toList: _*)
+          case SFailure(t) => config.opt[String]("runMode").getOrElse("production") match {
+            case "development" => InternalServerError ~> ResponseString(t.stackTrace)
+            case _ => InternalServerError ~> ResponseString("E500 :: InternalServerError:")
+          }
         }
-      }
     }
 
   /*

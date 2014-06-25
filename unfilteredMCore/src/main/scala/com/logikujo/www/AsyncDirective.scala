@@ -43,7 +43,7 @@ object AsyncDirective {
       intent(req)(req) match {
         case Result.Success(asyncResponse) => asyncResponse ! (req.respond _)
         case Result.Failure(response) => req.respond(response)
-        case Result.Error(response) => req.respond(response)
+        case Result.Error(response) => Pass
       }
     }
   }
