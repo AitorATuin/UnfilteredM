@@ -6,7 +6,7 @@ import unfiltered.Cycle._
 import unfiltered.Async
 import unfiltered.filter._
 import unfiltered.directives.{Result, Directive}
-import unfiltered.response.ResponseFunction
+import unfiltered.response.{ResponseFunction, Pass}
 import unfiltered.request.HttpRequest
 
 import scalaz._
@@ -17,6 +17,7 @@ import javax.servlet.http.{HttpServletRequest, HttpServletResponse}
 
 import scala.util.{Try, Success => TSuccess, Failure => TFailure}
 import scala.annotation.implicitNotFound
+import scala.concurrent.Future
 
 import com.typesafe.config.{ConfigException, ConfigFactory, Config => CConfig}
 import com.github.kxbmap.configs._
@@ -100,8 +101,12 @@ package object www {
   // Reader Monad with Tagged Configuration
   type #>[Tag, R] = Kleisli[ErrorM, Config[Tag], R]
   type ##>[C, Tag, R] = Kleisli[ErrorM, C @@ Tag, R]
+  // Function to inject Config Values
   type ?>[Tag, R] = (Configuration @@ Tag) => ErrorM[R]
   type ??>[C, Tag, R] = (C @@ Tag) => ErrorM[R]
+  // Partial Functions to inject params
+  type =>?[A,B] = PartialFunction[HttpRequest[HttpServletRequest], Directive[HttpServletRequest, ResponseFunction[A], Future[B]]]
+  type =>?? = =>?[(String,Map[String, Any]),(String, Map[String, Any])]
 
   // alias for \/ monad with String in the left.
   type ErrorM[+A] = String \/ A
@@ -121,6 +126,10 @@ package object www {
   // Lift a function from Tagger C to Kleisli
   def ##>[C, Tag, R](f: C @@ Tag => ErrorM[R]) = Kleisli[ErrorM, C @@ Tag, R](f)
   def ##>[C, Tag, R](v: R): ##>[C, Tag, R] = ##>(_ => v.right[String])
+
+  // Lift a Partial Function to =>??? type
+  def =>??[Tag](f: HttpRequest[HttpServletRequest] => Directive[HttpServletRequest, ResponseFunction[(String,Map[String, Any])], Future[(String,Map[String,Any])]]) = PartialFunction(f).withTag[Tag]
+
 
   def liftM[A](f: Configuration => ErrorM[A]) = Kleisli[ErrorM, Configuration, A](f)
   // Just returns the configuration, ask function inside Reader Monad
@@ -200,7 +209,7 @@ package object www {
       for {
         server <- value
         intentsList <- intents.sequenceU
-      } yield server.context(ctx){_.filter(async.Planify(intentsList.reduce(_ orElse _))) } // TODO: Try to use as[sync.Plan]
+      } yield server.context(ctx){_.filter(async.Planify(intentsList.reduce(Pass.onPass(_,_))))} // TODO: Try to use as[sync.Plan]
     }
     def run()(implicit c: Config[App]) = value map (_.run()) run c
   }
@@ -212,5 +221,13 @@ package object www {
 
   implicit class Configured[T](v: ErrorM[T]) {
     def configured[App]: App #> T = #>((c:Config[App]) => v)
+  }
+
+  implicit class ThrowableOps(t:Throwable) {
+    lazy val stackTrace: String = {
+      val sw = new StringWriter()
+      t.printStackTrace(new PrintWriter(sw))
+      sw.toString
+    }
   }
 }
